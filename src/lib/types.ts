@@ -1,0 +1,100 @@
+export interface Project {
+  id: string;
+  name: string;
+  description: string;
+  client_name: string;
+  project_number: string;
+  start_date: string;
+  end_date: string | null;
+  status: 'active' | 'completed' | 'on_hold';
+  created_at: string;
+  updated_at: string;
+}
+
+// RFI Status Types
+export type RFIStatus = 'draft' | 'sent' | 'responded' | 'overdue';
+
+// RFI Priority Types
+export type RFIPriority = 'low' | 'medium' | 'high';
+
+// RFI Interface
+export interface RFI {
+  id: string;
+  rfi_number: string;
+  project_id: string;
+  subject: string;
+  description: string;
+  status: RFIStatus;
+  priority: RFIPriority;
+  assigned_to: string | null;
+  due_date: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  response: string | null;
+  response_date: string | null;
+  attachments: string[];
+}
+
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+  role: 'admin' | 'user';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProjectFormData {
+  name: string;
+  description: string;
+  client_name: string;
+  project_number: string;
+  start_date: string;
+  end_date?: string;
+  status: Project['status'];
+}
+
+// Form Input Types
+export interface CreateRFIInput {
+  project_id: string;
+  subject: string;
+  to_recipient: string;
+  reason_for_rfi: string;
+  urgency: 'urgent' | 'non-urgent';
+  status: RFIStatus;
+  company?: string;
+  contract_number?: string;
+  revision?: string;
+  date_created?: string;
+  work_impact?: string;
+  cost_impact?: string;
+  schedule_impact?: string;
+  discipline?: string;
+  system?: string;
+  sub_system?: string;
+  schedule_id?: string;
+  test_package?: string;
+  contractor_proposed_solution?: string;
+  associated_reference_documents?: string;
+  requested_by?: string;
+  reviewed_by?: string;
+}
+
+export interface UpdateRFIInput {
+  subject?: string;
+  description?: string;
+  status?: RFIStatus;
+  priority?: RFIPriority;
+  assigned_to?: string | null;
+  due_date?: string | null;
+  response?: string | null;
+  response_date?: string | null;
+}
+
+// API Response Types
+export interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+  error?: string;
+} 
