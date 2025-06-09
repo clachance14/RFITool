@@ -1,6 +1,0 @@
-{
-  "/not-found": "app/not-found.js",
-  "/page": "app/page.js",
-  "/rfis/create/page": "app/rfis/create/page.js",
-  "/api/projects/route": "app/api/projects/route.js"
-}

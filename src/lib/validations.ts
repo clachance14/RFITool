@@ -10,7 +10,7 @@ const baseRFISchema = {
   subject: textField,
   reason_for_rfi: z.string().min(1, 'Reason for RFI is required'),
   contractor_question: z.string().min(1, 'Contractor question is required'),
-  project_id: z.string().uuid('Invalid project ID').min(1, 'Project selection is required'),
+  project_id: z.string().min(1, 'Project selection is required'),
   status: z.enum(['draft', 'sent', 'responded', 'overdue'], {
     errorMap: () => ({ message: 'Invalid status value' }),
   }),

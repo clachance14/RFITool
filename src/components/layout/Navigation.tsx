@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { LayoutDashboard, FilePlus, Bell, LogOut } from 'lucide-react';
+import { LayoutDashboard, FilePlus, LogOut, FileText, Settings } from 'lucide-react';
 
 export default function Navigation() {
   const pathname = usePathname();
@@ -48,6 +48,21 @@ export default function Navigation() {
           </li>
           <li>
             <Link
+              href="/rfi-log"
+              className={`flex items-center px-4 py-3 rounded-lg text-lg font-medium transition-colors ${
+                pathname === '/rfi-log'
+                  ? 'bg-gray-100 text-blue-600 border-l-4 border-blue-600'
+                  : 'text-gray-700 hover:bg-gray-50'
+              }`}
+              data-testid="nav-rfi-log"
+              aria-current={pathname === '/rfi-log' ? 'page' : undefined}
+            >
+              <FileText className="mr-3 h-6 w-6" />
+              RFI Log
+            </Link>
+          </li>
+          <li>
+            <Link
               href="/rfis/create"
               className={`flex items-center px-4 py-3 rounded-lg text-lg font-medium transition-colors ${
                 pathname === '/rfis/create'
@@ -63,19 +78,20 @@ export default function Navigation() {
           </li>
           <li>
             <Link
-              href="/notifications"
+              href="/admin"
               className={`flex items-center px-4 py-3 rounded-lg text-lg font-medium transition-colors ${
-                pathname === '/notifications'
+                pathname === '/admin'
                   ? 'bg-gray-100 text-blue-600 border-l-4 border-blue-600'
                   : 'text-gray-700 hover:bg-gray-50'
               }`}
-              data-testid="nav-notifications"
-              aria-current={pathname === '/notifications' ? 'page' : undefined}
+              data-testid="nav-admin"
+              aria-current={pathname === '/admin' ? 'page' : undefined}
             >
-              <Bell className="mr-3 h-6 w-6" />
-              Notifications
+              <Settings className="mr-3 h-6 w-6" />
+              Admin
             </Link>
           </li>
+
         </ul>
         <button
           className="flex items-center px-4 py-3 rounded-lg text-lg font-medium text-gray-700 hover:bg-gray-50 transition-colors w-full mt-8"
@@ -101,6 +117,17 @@ export default function Navigation() {
           <span className="text-xs font-medium">Dashboard</span>
         </Link>
         <Link
+          href="/rfi-log"
+          className={`flex flex-col items-center justify-center px-2 py-1 rounded transition-colors ${
+            pathname === '/rfi-log' ? 'text-blue-600' : 'text-gray-500 hover:text-blue-600'
+          }`}
+          data-testid="mobile-nav-rfi-log"
+          aria-current={pathname === '/rfi-log' ? 'page' : undefined}
+        >
+          <FileText className="h-6 w-6 mb-1" />
+          <span className="text-xs font-medium">RFI Log</span>
+        </Link>
+        <Link
           href="/rfis/create"
           className={`flex flex-col items-center justify-center px-2 py-1 rounded transition-colors ${
             pathname === '/rfis/create' ? 'text-blue-600' : 'text-gray-500 hover:text-blue-600'
@@ -112,16 +139,17 @@ export default function Navigation() {
           <span className="text-xs font-medium">Create RFI</span>
         </Link>
         <Link
-          href="/notifications"
+          href="/admin"
           className={`flex flex-col items-center justify-center px-2 py-1 rounded transition-colors ${
-            pathname === '/notifications' ? 'text-blue-600' : 'text-gray-500 hover:text-blue-600'
+            pathname === '/admin' ? 'text-blue-600' : 'text-gray-500 hover:text-blue-600'
           }`}
-          data-testid="mobile-nav-notifications"
-          aria-current={pathname === '/notifications' ? 'page' : undefined}
+          data-testid="mobile-nav-admin"
+          aria-current={pathname === '/admin' ? 'page' : undefined}
         >
-          <Bell className="h-6 w-6 mb-1" />
-          <span className="text-xs font-medium">Notifications</span>
+          <Settings className="h-6 w-6 mb-1" />
+          <span className="text-xs font-medium">Admin</span>
         </Link>
+
       </nav>
     </>
   );

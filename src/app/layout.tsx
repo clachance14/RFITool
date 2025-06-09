@@ -3,6 +3,7 @@ import './globals.css'
 import Navigation from '@/components/layout/Navigation'
 import Header from '@/components/layout/Header'
 import { Toaster } from 'react-hot-toast'
+import { RFIProvider } from '@/contexts/RFIContext'
 
 export const metadata: Metadata = {
   title: {
@@ -20,12 +21,14 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="min-h-screen flex bg-gray-50">
-        <Navigation />
-        <div className="flex-1 flex flex-col">
-          <Header />
-          <main className="flex-1 p-6 overflow-y-auto">{children}</main>
-        </div>
-        <Toaster position="top-right" />
+        <RFIProvider>
+          <Navigation />
+          <div className="flex-1 flex flex-col">
+            <Header />
+            <main className="flex-1 p-6 overflow-y-auto">{children}</main>
+          </div>
+          <Toaster position="top-right" />
+        </RFIProvider>
       </body>
     </html>
   )

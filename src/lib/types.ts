@@ -48,6 +48,12 @@ export interface RFI {
   response: string | null;
   response_date: string | null;
   attachments: string[];
+  // Cost Impact Details
+  manhours?: number;
+  labor_costs?: number;
+  material_costs?: number;
+  equipment_costs?: number;
+  subcontractor_costs?: number;
 }
 
 export interface User {
@@ -66,7 +72,6 @@ export interface ProjectFormData {
   project_number: string;
   start_date: string;
   end_date?: string;
-  status: Project['status'];
 }
 
 // Form Input Types
@@ -93,6 +98,14 @@ export interface CreateRFIInput {
   associated_reference_documents?: string;
   requested_by?: string;
   reviewed_by?: string;
+  contractor_question?: string;
+  block_area?: string;
+  // Cost Impact Details
+  manhours?: number;
+  labor_costs?: number;
+  material_costs?: number;
+  equipment_costs?: number;
+  subcontractor_costs?: number;
 }
 
 export interface UpdateRFIInput {
