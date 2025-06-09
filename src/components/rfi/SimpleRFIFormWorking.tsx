@@ -8,6 +8,7 @@ import { createRFISchema } from '@/lib/validations';
 import type { CreateRFIInput } from '@/lib/types';
 import { useProjects } from '@/hooks/useProjects';
 import { useRFIs } from '@/contexts/RFIContext';
+import ProjectSelect from '@/components/project/ProjectSelect';
 
 export function SimpleRFIFormWorking() {
   const router = useRouter();
@@ -116,8 +117,8 @@ export function SimpleRFIFormWorking() {
     });
   }, [form]);
 
-  const handleProjectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    form.setValue('project_id', e.target.value);
+  const handleProjectChange = (value: string) => {
+    form.setValue('project_id', value);
   };
 
   const handleClearForm = () => {
@@ -213,25 +214,13 @@ export function SimpleRFIFormWorking() {
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Details</h3>
             <div className="space-y-4">
               <div>
-                <label htmlFor="project_id" className="block text-sm font-medium text-gray-700 mb-1">
-                  Project *
-                </label>
-                <select
-                  id="project_id"
-                  {...form.register('project_id')}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                <ProjectSelect
+                  value={form.watch('project_id')}
                   onChange={handleProjectChange}
-                >
-                  <option value="">Select a project...</option>
-                  {projects.map(project => (
-                    <option key={project.id} value={project.id}>
-                      {project.project_name}
-                    </option>
-                  ))}
-                </select>
-                {form.formState.errors.project_id && (
-                  <p className="text-red-600 text-sm mt-1">{form.formState.errors.project_id.message}</p>
-                )}
+                  label="Project"
+                  required={true}
+                  error={form.formState.errors.project_id?.message}
+                />
               </div>
 
               <div>

@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Upload, X, Eye, Settings, Users, Mail, Cog, FileText, Shield, Plus, Edit, Trash2 } from 'lucide-react';
+import { AdminProjectSection } from '@/components/project/AdminProjectSection';
 
 // Mock user data - in real app this would come from a database
 const mockUsers = [
@@ -621,15 +622,7 @@ export default function AdminPage() {
 
           {/* Project Settings Tab */}
           {activeTab === 'projects' && (
-            <div className="space-y-6">
-              <h2 className="text-xl font-semibold text-gray-900">Project Configuration</h2>
-              <div className="bg-gray-50 rounded-lg p-8 text-center">
-                <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">Project Settings</h3>
-                <p className="text-gray-600">Configure default project settings, templates, and workflows.</p>
-                <p className="text-sm text-gray-500 mt-2">Coming soon...</p>
-              </div>
-            </div>
+            <AdminProjectSection />
           )}
 
           {/* Notifications Tab */}

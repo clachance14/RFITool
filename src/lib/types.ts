@@ -67,11 +67,13 @@ export interface User {
 
 export interface ProjectFormData {
   name: string;
-  description: string;
   client_name: string;
-  project_number: string;
+  job_number: string;
+  contract_number: string;
   start_date: string;
   end_date?: string;
+  status?: 'active' | 'completed' | 'on_hold';
+  description: string;
 }
 
 // Form Input Types

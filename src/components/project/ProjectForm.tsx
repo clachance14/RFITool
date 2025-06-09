@@ -21,12 +21,13 @@ export function ProjectForm({ initialData, onSubmit, submitLabel = 'Create Proje
   const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState<ProjectFormData>({
     name: initialData?.name || '',
-    description: initialData?.description || '',
     client_name: initialData?.client_name || '',
-    project_number: initialData?.project_number || '',
+    job_number: initialData?.job_number || '',
+    contract_number: initialData?.contract_number || '',
     start_date: initialData?.start_date || new Date().toISOString().split('T')[0],
     end_date: initialData?.end_date || '',
     status: initialData?.status || 'active',
+    description: initialData?.description || '',
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -69,17 +70,6 @@ export function ProjectForm({ initialData, onSubmit, submitLabel = 'Create Proje
         </div>
 
         <div>
-          <Label htmlFor="description">Description</Label>
-          <Textarea
-            id="description"
-            value={formData.description}
-            onChange={(e) => handleChange('description', e.target.value)}
-            required
-            placeholder="Enter project description"
-          />
-        </div>
-
-        <div>
           <Label htmlFor="client_name">Client Name</Label>
           <Input
             id="client_name"
@@ -91,13 +81,24 @@ export function ProjectForm({ initialData, onSubmit, submitLabel = 'Create Proje
         </div>
 
         <div>
-          <Label htmlFor="project_number">Project Number</Label>
+          <Label htmlFor="job_number">Job Number (Contractor)</Label>
           <Input
-            id="project_number"
-            value={formData.project_number}
-            onChange={(e) => handleChange('project_number', e.target.value)}
+            id="job_number"
+            value={formData.job_number}
+            onChange={(e) => handleChange('job_number', e.target.value)}
             required
-            placeholder="Enter project number"
+            placeholder="Enter contractor job number"
+          />
+        </div>
+
+        <div>
+          <Label htmlFor="contract_number">Contract Number (Client)</Label>
+          <Input
+            id="contract_number"
+            value={formData.contract_number}
+            onChange={(e) => handleChange('contract_number', e.target.value)}
+            required
+            placeholder="Enter client contract number"
           />
         </div>
 
@@ -139,6 +140,17 @@ export function ProjectForm({ initialData, onSubmit, submitLabel = 'Create Proje
               <SelectItem value="on_hold">On Hold</SelectItem>
             </SelectContent>
           </Select>
+        </div>
+
+        <div>
+          <Label htmlFor="description">Description</Label>
+          <Textarea
+            id="description"
+            value={formData.description}
+            onChange={(e) => handleChange('description', e.target.value)}
+            required
+            placeholder="Enter project description"
+          />
         </div>
       </div>
 
