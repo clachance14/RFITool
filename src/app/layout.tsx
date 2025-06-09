@@ -1,10 +1,8 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
 import './globals.css'
-import Navigation from '@/components/layout/Navigation';
-import Header from '@/components/layout/Header';
-
-const inter = Inter({ subsets: ['latin'] })
+import Navigation from '@/components/layout/Navigation'
+import Header from '@/components/layout/Header'
+import { Toaster } from 'react-hot-toast'
 
 export const metadata: Metadata = {
   title: 'RFI Ware',
@@ -17,12 +15,15 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <div className="min-h-screen flex bg-gray-50">
-      <Navigation />
-      <div className="flex-1 flex flex-col">
-        <Header />
-        <main className="flex-1 p-6 overflow-y-auto">{children}</main>
-      </div>
-    </div>
+    <html lang="en">
+      <body className="min-h-screen flex bg-gray-50">
+        <Navigation />
+        <div className="flex-1 flex flex-col">
+          <Header />
+          <main className="flex-1 p-6 overflow-y-auto">{children}</main>
+        </div>
+        <Toaster position="top-right" />
+      </body>
+    </html>
   )
 } 

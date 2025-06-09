@@ -61,40 +61,42 @@ describe('useRFIs Hook', () => {
     });
 
     it('creates RFI successfully', async () => {
-      const newRFI: CreateRFIInput = {
-        project_id: '1',
-        subject: 'New RFI',
+      const mockRFI = {
+        id: '123e4567-e89b-12d3-a456-426614174001',
+        rfi_number: 'RFI-001',
+        project_id: '123e4567-e89b-12d3-a456-426614174000',
+        subject: 'Test RFI',
         to_recipient: 'Test Recipient',
         company: 'Test Company',
-        contract_number: 'CN-001',
-        revision: '0',
-        date_created: '2024-01-01T00:00:00Z',
+        contract_number: 'TEST-001',
+        revision: '1',
+        date_created: '2024-03-20T00:00:00Z',
         work_impact: 'None',
         cost_impact: 'None',
         schedule_impact: 'None',
-        discipline: 'Electrical',
-        system: 'Power',
-        sub_system: 'Distribution',
-        schedule_id: 'SCH-001',
-        reason_for_rfi: 'Test Reason',
-        test_package: 'TP-001',
-        contractor_proposed_solution: 'Test Solution',
-        associated_reference_documents: 'REF-001',
-        requested_by: 'Test User',
-        reviewed_by: 'Test Reviewer',
-        urgency: 'non-urgent',
-        status: 'draft',
+        discipline: 'Test',
+        system: 'Test',
+        sub_system: 'Test',
+        schedule_id: 'TEST-001',
+        reason_for_rfi: 'Test',
+        test_package: 'Test',
+        contractor_proposed_solution: 'Test',
+        associated_reference_documents: 'Test',
+        requested_by: 'Test',
+        reviewed_by: 'Test',
+        urgency: 'non-urgent' as const,
+        status: 'draft' as const,
       };
 
       const { result } = renderHook(() => useRFIs());
 
       await act(async () => {
-        await result.current.createRFI(newRFI);
+        await result.current.createRFI(mockRFI);
       });
 
       expect(result.current.rfis).toContainEqual(expect.objectContaining({
-        project_id: newRFI.project_id,
-        subject: newRFI.subject,
+        project_id: mockRFI.project_id,
+        subject: mockRFI.subject,
       }));
       expect(result.current.loading).toBe(false);
       expect(result.current.error).toBe(null);

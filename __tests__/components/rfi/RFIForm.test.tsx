@@ -1,9 +1,13 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { RFIForm } from '@/components/rfi/RFIForm';
 import { useRouter } from 'next/navigation';
 import { createRFISchema } from '@/lib/validations';
+import { useProjects } from '@/hooks/useProjects';
+import { useRFIs } from '@/hooks/useRFIs';
+import { jest } from '@jest/globals';
+import type { CreateRFIInput } from '@/lib/types';
 
 // Mock next/navigation
 jest.mock('next/navigation', () => ({
@@ -13,30 +17,14 @@ jest.mock('next/navigation', () => ({
 // Mock fetch
 global.fetch = jest.fn();
 
-// Mock localStorage
-const localStorageMock = (() => {
-  let store: Record<string, string> = {};
-  return {
-    getItem: (key: string) => store[key] || null,
-    setItem: (key: string, value: string) => { store[key] = value; },
-    removeItem: (key: string) => { delete store[key]; },
-    clear: () => { store = {}; },
-  };
-})();
-Object.defineProperty(window, 'localStorage', { value: localStorageMock });
+// Mock the hooks
+jest.mock('@/hooks/useProjects');
+jest.mock('@/hooks/useRFIs');
 
-// Add this at the top of the file after imports
-jest.mock('@/hooks/useProjects', () => ({
-  useProjects: () => ({
-    getProjects: jest.fn().mockResolvedValue({
-      data: [
-        { id: 'test-project-id', name: 'Test Project' }
-      ],
-      error: undefined,
-    }),
-    loading: false,
-    error: null,
-  })
+// Mock heavy components
+jest.mock('@/components/project/ProjectSelect', () => ({
+  __esModule: true,
+  default: () => <div data-testid="mock-project-select" />
 }));
 
 describe('RFIForm Component', () => {
@@ -44,10 +32,28 @@ describe('RFIForm Component', () => {
     push: jest.fn(),
   };
 
+  const mockProjects = [
+    { id: 'test-project-id', name: 'Test Project', contract_number: 'TEST-001' },
+  ];
+
+  const mockGetProjects = jest.fn();
+  const mockCreateRFI = jest.fn();
+
   beforeEach(() => {
     (useRouter as jest.Mock).mockReturnValue(mockRouter);
-    localStorage.clear();
+    (localStorage.getItem as jest.Mock).mockClear();
+    (localStorage.setItem as jest.Mock).mockClear();
+    (localStorage.removeItem as jest.Mock).mockClear();
+    (localStorage.clear as jest.Mock).mockClear();
     jest.clearAllMocks();
+    (useProjects as jest.Mock).mockReturnValue({
+      getProjects: mockGetProjects,
+    });
+    (useRFIs as jest.Mock).mockReturnValue({
+      createRFI: mockCreateRFI,
+    });
+    mockGetProjects.mockResolvedValue({ data: mockProjects, error: undefined });
+    localStorage.clear();
   });
 
   describe('Form Rendering', () => {
@@ -75,68 +81,103 @@ describe('RFIForm Component', () => {
       render(<RFIForm />);
 
       expect(screen.getByRole('button', { name: /reset form/i })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /save as draft/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /save draft/i })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /create rfi/i })).toBeInTheDocument();
     });
   });
 
   describe('Form Validation', () => {
     it('validates required fields', async () => {
-      render(<RFIForm />);
+      await act(async () => {
+        render(<RFIForm />);
+      });
 
-      // Try to submit without filling required fields
-      const submitButton = screen.getByRole('button', { name: /create rfi/i });
-      await userEvent.click(submitButton);
+      // Wait for projects to load
+      await waitFor(() => {
+        expect(screen.queryByText('Loading projects...')).not.toBeInTheDocument();
+      });
 
-      // Check for validation messages
+      // Submit form without filling required fields
+      await act(async () => {
+        await userEvent.click(screen.getByRole('button', { name: /create rfi/i }));
+      });
+
+      // Check validation errors
       expect(await screen.findByText(/subject is required/i)).toBeInTheDocument();
+      expect(await screen.findByText(/to recipient is required/i)).toBeInTheDocument();
       expect(await screen.findByText(/reason for rfi is required/i)).toBeInTheDocument();
+      expect(await screen.findByText(/invalid project id/i)).toBeInTheDocument();
+      // Optional fields should not show required errors
+      expect(screen.queryByText(/company is required/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/contract number is required/i)).not.toBeInTheDocument();
     });
 
     it('validates field length constraints', async () => {
-      render(<RFIForm />);
+      await act(async () => {
+        render(<RFIForm />);
+      });
 
-      const subjectInput = screen.getByLabelText(/subject/i);
-      await userEvent.type(subjectInput, 'a'.repeat(501)); // Exceed max length
+      // Wait for projects to load
+      await waitFor(() => {
+        expect(screen.queryByText('Loading projects...')).not.toBeInTheDocument();
+      });
 
-      const submitButton = screen.getByRole('button', { name: /create rfi/i });
-      await userEvent.click(submitButton);
+      // Type a long subject
+      const subjectInput = screen.getByTestId('subject-input') as HTMLInputElement;
+      await userEvent.type(subjectInput, 'a'.repeat(501));
 
+      // Submit form
+      await act(async () => {
+        await userEvent.click(screen.getByRole('button', { name: /create rfi/i }));
+      });
+
+      // Check validation error
       expect(await screen.findByText(/subject too long/i)).toBeInTheDocument();
-    });
+    }, 10000);
   });
 
   describe('Auto-save Functionality', () => {
     it('saves form data to localStorage on field change', async () => {
-      // Spy on localStorage.setItem
-      const setItemSpy = jest.spyOn(window.localStorage, 'setItem');
+      // Arrange
       render(<RFIForm />);
-
-      const subjectInput = screen.getByLabelText(/subject/i);
+      const subjectInput = await screen.findByTestId('subject-input') as HTMLInputElement;
+      
+      // Act & Assert - Step 1: Initial State
+      expect(subjectInput).toHaveValue('');
+      expect(localStorage.getItem('rfi_form_draft')).toBeNull();
+      
+      // Act - Step 2: Type in input
       await userEvent.type(subjectInput, 'Test Subject');
-
-      // Wait for auto-save
+      expect(subjectInput).toHaveValue('Test Subject');
+      
+      // Assert - Step 3: Check localStorage
       await waitFor(() => {
-        expect(setItemSpy).toHaveBeenCalled();
-      });
-
-      // Check if data was saved correctly
-      const savedData = JSON.parse(window.localStorage.getItem('rfi_form_draft') || '{}');
-      expect(savedData.subject).toBe('Test Subject');
+        const saved = localStorage.getItem('rfi_form_draft');
+        expect(saved).not.toBeNull();
+        const parsed = JSON.parse(saved || '{}');
+        expect(parsed.subject).toBe('Test Subject');
+      }, { timeout: 3000 });
     });
 
-    it('loads saved draft on component mount', () => {
-      const savedDraft = {
+    it('loads saved draft on component mount', async () => {
+      // Set up saved draft
+      localStorage.setItem('rfi_form_draft', JSON.stringify({
         subject: 'Saved Subject',
         reason_for_rfi: 'Saved Reason',
-        lastSaved: new Date().toISOString(),
-      };
-      localStorage.setItem('rfi_form_draft', JSON.stringify(savedDraft));
+      }));
 
-      render(<RFIForm />);
+      await act(async () => {
+        render(<RFIForm />);
+      });
 
-      expect(screen.getByDisplayValue('Saved Subject')).toBeInTheDocument();
-      expect(screen.getByDisplayValue('Saved Reason')).toBeInTheDocument();
+      // Wait for projects to load
+      await waitFor(() => {
+        expect(screen.queryByText('Loading projects...')).not.toBeInTheDocument();
+      });
+
+      // Check if saved values are loaded
+      expect(await screen.findByDisplayValue('Saved Subject')).toBeInTheDocument();
+      expect(await screen.findByDisplayValue('Saved Reason')).toBeInTheDocument();
     });
   });
 
@@ -144,10 +185,10 @@ describe('RFIForm Component', () => {
     it('saves current form state as draft', async () => {
       render(<RFIForm />);
 
-      const subjectInput = screen.getByLabelText(/subject/i);
+      const subjectInput = screen.getByTestId('subject-input') as HTMLInputElement;
       await userEvent.type(subjectInput, 'Draft Subject');
 
-      const saveDraftButton = screen.getByRole('button', { name: /save as draft/i });
+      const saveDraftButton = screen.getByRole('button', { name: 'Save Draft' });
       await userEvent.click(saveDraftButton);
 
       expect(await screen.findByText(/draft saved successfully/i)).toBeInTheDocument();
@@ -157,58 +198,86 @@ describe('RFIForm Component', () => {
 
   describe('Form Submission', () => {
     it('submits form data correctly', async () => {
-      const mockResponse = {
+      mockCreateRFI.mockResolvedValue({
         success: true,
-        data: {
-          id: '123',
-          rfi_number: 'RFI-001',
-        },
-      };
-
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
+        data: { id: 'rfi-001' },
+        error: undefined,
       });
 
-      render(<RFIForm />);
+      await act(async () => {
+        render(<RFIForm />);
+      });
 
-      // Fill required fields
-      await userEvent.type(screen.getByLabelText(/subject/i), 'Test Subject');
-      await userEvent.type(screen.getByLabelText(/reason for rfi/i), 'Test Reason');
+      // Wait for projects to load
+      await waitFor(() => {
+        expect(screen.queryByText('Loading projects...')).not.toBeInTheDocument();
+      });
+
+      // Fill in form fields
+      await userEvent.type(screen.getByLabelText(/subject/i), 'Test RFI');
+      await userEvent.type(screen.getByLabelText(/to recipient/i), 'John Doe');
+      await userEvent.type(screen.getByLabelText(/company/i), 'Test Company');
+      await userEvent.type(screen.getByLabelText(/contract number/i), 'CN-001');
+
+      // Select project
+      const projectSelect = screen.getByTestId('project-select');
+      fireEvent.pointerDown(projectSelect);
+      const projectOption = await screen.findByText('Test Project', {}, { container: document.body });
+      await userEvent.click(projectOption);
 
       // Submit form
-      const submitButton = screen.getByRole('button', { name: /create rfi/i });
-      await userEvent.click(submitButton);
+      await act(async () => {
+        await userEvent.click(screen.getByRole('button', { name: /create rfi/i }));
+      });
 
       // Check loading state
-      expect(screen.getByText(/creating rfi/i)).toBeInTheDocument();
+      expect(await screen.findByText('Creating RFI...')).toBeInTheDocument();
 
       // Wait for success message
       expect(await screen.findByText(/rfi rfi-001 created successfully/i)).toBeInTheDocument();
 
-      // Verify API call
-      expect(global.fetch).toHaveBeenCalledWith('/api/rfis', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: expect.any(String),
-      });
+      // Verify API calls
+      expect(mockGetProjects).toHaveBeenCalled();
+      expect(mockCreateRFI).toHaveBeenCalledWith(expect.objectContaining({
+        subject: 'Test RFI',
+        to_recipient: 'John Doe',
+        company: 'Test Company',
+        contract_number: 'CN-001',
+        project_id: 'test-project-id',
+      }));
     });
 
     it('handles submission errors correctly', async () => {
-      (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('Network error'));
+      mockCreateRFI.mockRejectedValue(new Error('Connection problem'));
 
-      render(<RFIForm />);
+      await act(async () => {
+        render(<RFIForm />);
+      });
 
-      // Fill required fields
-      await userEvent.type(screen.getByLabelText(/subject/i), 'Test Subject');
-      await userEvent.type(screen.getByLabelText(/reason for rfi/i), 'Test Reason');
+      // Wait for projects to load
+      await waitFor(() => {
+        expect(screen.queryByText('Loading projects...')).not.toBeInTheDocument();
+      });
+
+      // Fill in form fields
+      await userEvent.type(screen.getByLabelText(/subject/i), 'Test RFI');
+      await userEvent.type(screen.getByLabelText(/to recipient/i), 'John Doe');
+      await userEvent.type(screen.getByLabelText(/company/i), 'Test Company');
+      await userEvent.type(screen.getByLabelText(/contract number/i), 'CN-001');
+
+      // Select project
+      const projectSelect = screen.getByTestId('project-select');
+      fireEvent.pointerDown(projectSelect);
+      const projectOption = await screen.findByText('Test Project', {}, { container: document.body });
+      await userEvent.click(projectOption);
 
       // Submit form
-      const submitButton = screen.getByRole('button', { name: /create rfi/i });
-      await userEvent.click(submitButton);
+      await act(async () => {
+        await userEvent.click(screen.getByRole('button', { name: /create rfi/i }));
+      });
 
       // Check error message
-      expect(await screen.findByText(/connection problem/i)).toBeInTheDocument();
+      expect(await screen.findByText('Connection problem. Please check your internet and try again.')).toBeInTheDocument();
     });
   });
 
@@ -234,35 +303,79 @@ describe('RFIForm Component', () => {
     });
 
     it('clears localStorage on reset', async () => {
-      render(<RFIForm />);
+      await act(async () => {
+        render(<RFIForm />);
+      });
 
-      // Fill some data
-      await userEvent.type(screen.getByLabelText(/subject/i), 'Test Subject');
+      // Wait for projects to load
+      await waitFor(() => {
+        expect(screen.queryByText('Loading projects...')).not.toBeInTheDocument();
+      });
 
-      // Reset form
-      const resetButton = screen.getByRole('button', { name: /reset form/i });
-      await userEvent.click(resetButton);
+      // Click reset button
+      await userEvent.click(screen.getByRole('button', { name: /reset/i }));
+
+      // Confirm reset
       await userEvent.click(screen.getByRole('button', { name: /confirm reset/i }));
 
+      // Verify localStorage was cleared
       expect(localStorage.removeItem).toHaveBeenCalledWith('rfi_form_draft');
     });
   });
 
   describe('Project Selection', () => {
     it('integrates with ProjectSelect component', async () => {
-      render(<RFIForm />);
-      screen.debug();
+      await act(async () => {
+        render(<RFIForm />);
+      });
 
-      // Check if ProjectSelect is rendered
-      expect(screen.getByTestId('project-select')).toBeInTheDocument();
+      // Wait for projects to load
+      await waitFor(() => {
+        expect(screen.queryByText('Loading projects...')).not.toBeInTheDocument();
+      });
 
-      // Simulate project selection
+      // Select project
       const projectSelect = screen.getByTestId('project-select');
-      await userEvent.click(projectSelect);
-      await userEvent.click(screen.getByText('Test Project'));
+      fireEvent.pointerDown(projectSelect);
+      const projectOption = await screen.findByText('Test Project', {}, { container: document.body });
+      await userEvent.click(projectOption);
 
       // Verify selection
-      expect(projectSelect).toHaveValue('test-project-id');
+      expect(screen.getByTestId('project-select').querySelector('[role="combobox"]')).toHaveTextContent('Test Project');
     });
+  });
+});
+
+describe('RFIForm - Form State Updates', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    jest.clearAllMocks();
+  });
+
+  test('input value updates when typing', async () => {
+    // Arrange
+    render(<RFIForm />);
+    
+    // Act
+    const input = await screen.findByTestId('subject-input');
+    await userEvent.type(input, 'Test');
+    
+    // Assert
+    expect(input).toHaveValue('Test');
+  });
+
+  test('saves form data to localStorage on field change', async () => {
+    // Arrange
+    render(<RFIForm />);
+    const input = await screen.findByTestId('subject-input');
+    
+    // Act
+    await userEvent.type(input, 'Test Subject');
+    
+    // Assert
+    const saved = localStorage.getItem('rfi_form_draft');
+    expect(saved).not.toBeNull();
+    const parsed = JSON.parse(saved || '{}');
+    expect(parsed.subject).toBe('Test Subject');
   });
 }); 

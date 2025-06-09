@@ -1,12 +1,26 @@
 export interface Project {
   id: string;
-  name: string;
-  description: string;
-  client_name: string;
-  project_number: string;
-  start_date: string;
-  end_date: string | null;
-  status: 'active' | 'completed' | 'on_hold';
+  
+  // Project Identification
+  project_name: string;
+  job_contract_number: string;
+  client_company_name: string;
+  project_manager_contact: string;
+  
+  // Project Details
+  location?: string;
+  project_type?: 'mechanical' | 'civil' | 'ie' | 'other';
+  contract_value?: number;
+  start_date?: string;
+  expected_completion?: string;
+  project_description?: string;
+  
+  // Default RFI Settings
+  default_urgency: 'urgent' | 'non-urgent';
+  standard_recipients: string[];
+  project_disciplines: string[];
+  
+  // System fields
   created_at: string;
   updated_at: string;
 }
@@ -97,4 +111,21 @@ export interface ApiResponse<T> {
   success: boolean;
   data?: T;
   error?: string;
+}
+
+// Create/Update input types
+export interface CreateProjectInput {
+  project_name: string;
+  job_contract_number: string;
+  client_company_name: string;
+  project_manager_contact: string;
+  location?: string;
+  project_type?: 'mechanical' | 'civil' | 'ie' | 'other';
+  contract_value?: number;
+  start_date?: string;
+  expected_completion?: string;
+  project_description?: string;
+  default_urgency: 'urgent' | 'non-urgent';
+  standard_recipients: string[];
+  project_disciplines: string[];
 } 

@@ -1,10 +1,19 @@
+"use client";
+
+import { SimpleRFIForm } from '@/components/rfi/SimpleRFIForm';
+
 export default function Home() {
   return (
-    <div className="container mx-auto px-4 py-8">
-      <h1 className="text-4xl font-bold mb-4">Welcome to RFI Ware</h1>
-      <p className="text-lg text-muted-foreground">
-        Professional RFI management for general contractors
-      </p>
-    </div>
-  )
+    <main className="min-h-screen p-8">
+      <div className="max-w-4xl mx-auto space-y-8">
+        <h1 className="text-2xl font-bold mb-4">RFI Tool</h1>
+        
+        {/* Debug Form */}
+        <div className="border-t pt-8">
+          <h2 className="text-xl font-semibold mb-4">Debug Form</h2>
+          <SimpleRFIForm />
+        </div>
+      </div>
+    </main>
+  );
 } 

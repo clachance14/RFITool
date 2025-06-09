@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
-import { useForm } from 'react-hook-form';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
 import { createRFISchema } from '@/lib/validations';
@@ -18,6 +18,9 @@ import {
 import { Button } from '@/components/ui/button';
 import { Alert } from '@/components/ui/alert';
 import ProjectSelect from '@/components/project/ProjectSelect';
+import { useToast } from '@/components/ui/use-toast';
+import { useRFI } from '@/hooks/useRFI';
+import { Loader2 } from 'lucide-react';
 
 // Form sections for better organization
 const FORM_SECTIONS = [
@@ -56,15 +59,16 @@ const AUTOSAVE_KEY = 'rfi_form_draft';
 
 export function RFIForm() {
   const router = useRouter();
+  const { toast } = useToast();
+  const { createRFI, isLoading, error } = useRFI();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
 
   // Initialize form with react-hook-form
-  const form = useForm<CreateRFIInput>({
+  const { register, handleSubmit, formState, getValues, setValue, watch, reset, control } = useForm<CreateRFIInput>({
     resolver: zodResolver(createRFISchema),
     defaultValues: {
       subject: '',
@@ -87,10 +91,15 @@ export function RFIForm() {
       associated_reference_documents: '',
       requested_by: '',
       reviewed_by: '',
-      urgency: 'non-urgent' as const,
-      status: 'draft' as const,
+      urgency: 'non-urgent',
+      status: 'draft'
     },
+    mode: 'onChange'
   });
+  const { errors, isDirty, isValid } = formState;
+
+  // Watch for changes in form fields
+  const formValues = watch();
 
   // Load draft from localStorage on mount
   useEffect(() => {
@@ -102,7 +111,7 @@ export function RFIForm() {
         const parsedDraft = JSON.parse(savedDraft);
         // Only load if we have actual form data
         if (parsedDraft.subject || parsedDraft.to_recipient) {
-          form.reset(parsedDraft);
+          reset(parsedDraft);
           setLastSaved(new Date(parsedDraft.lastSaved));
         }
       } catch (error) {
@@ -110,87 +119,33 @@ export function RFIForm() {
       }
     }
     setIsInitialLoad(false);
-  }, [form, isInitialLoad]);
+  }, [reset, isInitialLoad]);
 
-  // Auto-save form data with debounce
+  // Auto-save effect
   useEffect(() => {
-    if (isInitialLoad) return;
-
-    const subscription = form.watch((data) => {
-      const formData = form.getValues();
-      // Only save if we have actual form data
-      if (formData.subject || formData.to_recipient) {
-        localStorage.setItem(
-          AUTOSAVE_KEY,
-          JSON.stringify({
-            ...formData,
-            lastSaved: new Date().toISOString(),
-          })
-        );
-        setLastSaved(new Date());
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, [form, isInitialLoad]);
+    if (isDirty) {
+      const currentValues = getValues();
+      localStorage.setItem(AUTOSAVE_KEY, JSON.stringify({
+        ...currentValues,
+        lastSaved: new Date().toISOString()
+      }));
+      setLastSaved(new Date());
+    }
+  }, [formValues, isDirty, getValues]);
 
   // Handle form submission
   const onSubmit = async (data: CreateRFIInput) => {
     setIsSubmitting(true);
-    setErrorMessage(null);
-    setSuccessMessage(null);
-
     try {
-      const response = await fetch('/api/rfis', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        // Handle API validation errors
-        if (response.status === 400 && result.error) {
-          throw new Error(result.error);
-        }
-        // Handle other API errors
-        throw new Error('Failed to create RFI. Please try again.');
+      const response = await createRFI(data);
+      if (response) {
+        setSuccessMessage(`RFI ${response.rfi_number} created successfully!`);
+        localStorage.removeItem(AUTOSAVE_KEY);
+        router.push('/rfis');
       }
-
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to create RFI');
-      }
-
-      // Show success message
-      setSuccessMessage(`RFI ${result.data.rfi_number} created successfully!`);
-      
-      // Clear draft and form data
-      localStorage.removeItem(AUTOSAVE_KEY);
-      setLastSaved(null);
-      
-      // Reset form after a short delay
-      setTimeout(() => {
-        form.reset();
-        setSuccessMessage(null);
-        setIsInitialLoad(true); // Reset initial load state
-      }, 3000);
-
-    } catch (error) {
-      console.error('Error submitting RFI:', error);
-      
-      // Handle different types of errors
-      if (error instanceof Error) {
-        if (error.message.includes('Failed to fetch')) {
-          setErrorMessage('Connection problem. Please check your internet and try again.');
-        } else {
-          setErrorMessage(error.message);
-        }
-      } else {
-        setErrorMessage('Something went wrong. Please try again.');
-      }
+    } catch (err) {
+      // Error is handled by the useRFI hook
+      console.error('Error creating RFI:', err);
     } finally {
       setIsSubmitting(false);
     }
@@ -198,7 +153,7 @@ export function RFIForm() {
 
   // Handle save as draft
   const handleSaveDraft = useCallback(() => {
-    const formData = form.getValues();
+    const formData = getValues();
     // Only save if we have actual form data
     if (formData.subject || formData.to_recipient) {
       localStorage.setItem(
@@ -212,22 +167,21 @@ export function RFIForm() {
       setSuccessMessage('Draft saved successfully');
       setTimeout(() => setSuccessMessage(null), 3000);
     }
-  }, [form]);
+  }, [getValues]);
 
   // Handle form reset
   const handleReset = useCallback(() => {
     if (showResetConfirm) {
-      form.reset();
+      reset();
       localStorage.removeItem(AUTOSAVE_KEY);
       setLastSaved(null);
       setShowResetConfirm(false);
-      setErrorMessage(null);
       setSuccessMessage(null);
       setIsInitialLoad(true); // Reset initial load state
     } else {
       setShowResetConfirm(true);
     }
-  }, [form, showResetConfirm]);
+  }, [reset, showResetConfirm]);
 
   // Handle view created RFI
   const handleViewRFI = useCallback((rfiId: string) => {
@@ -235,10 +189,16 @@ export function RFIForm() {
   }, [router]);
 
   return (
-    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
       {/* Form Header */}
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-semibold text-gray-900">Create New RFI</h2>
+        {isLoading && (
+          <div className="text-sm text-gray-500 flex items-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Creating RFI...
+          </div>
+        )}
         {lastSaved && (
           <p className="text-sm text-gray-500">
             Last saved: {lastSaved.toLocaleTimeString()}
@@ -254,9 +214,9 @@ export function RFIForm() {
       )}
 
       {/* Error Message */}
-      {errorMessage && (
+      {error && (
         <Alert variant="destructive" className="mb-4">
-          {errorMessage}
+          {error.message || 'Connection problem. Please check your internet and try again.'}
         </Alert>
       )}
 
@@ -269,18 +229,13 @@ export function RFIForm() {
               if (field === 'project_id') {
                 return (
                   <div key={field} className="col-span-full">
-                    <ProjectSelect
-                      value={form.watch('project_id')}
-                      onChange={(value) => form.setValue('project_id', value)}
-                      label="Project"
-                      required
-                      data-testid="project-select"
-                    />
-                    {form.formState.errors.project_id && (
-                      <p className="text-sm text-red-600 mt-1">
-                        {form.formState.errors.project_id.message}
-                      </p>
-                    )}
+                    <div className="space-y-2" data-testid="project-select">
+                      <ProjectSelect
+                        value={getValues('project_id')}
+                        onChange={(value) => setValue('project_id', value)}
+                        error={errors.project_id?.message}
+                      />
+                    </div>
                   </div>
                 );
               }
@@ -296,12 +251,12 @@ export function RFIForm() {
                         {field.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
                       </label>
                       <SelectComponent
-                        value={form.watch(field)}
+                        value={getValues(field)}
                         onValueChange={(value: string) => {
                           if (field === 'urgency') {
-                            form.setValue(field, value as 'urgent' | 'non-urgent');
+                            setValue(field, value as 'urgent' | 'non-urgent');
                           } else if (field === 'status') {
-                            form.setValue(field, value as 'draft' | 'sent' | 'responded' | 'overdue');
+                            setValue(field, value as 'draft' | 'sent' | 'responded' | 'overdue');
                           }
                         }}
                       >
@@ -324,11 +279,57 @@ export function RFIForm() {
                           )}
                         </SelectContent>
                       </SelectComponent>
-                      {form.formState.errors[field] && (
+                      {errors[field] && (
                         <p className="text-sm text-red-600 mt-1">
-                          {form.formState.errors[field]?.message}
+                          {errors[field]?.message}
                         </p>
                       )}
+                    </div>
+                  </div>
+                );
+              }
+
+              if (field === 'subject') {
+                return (
+                  <div key={field}>
+                    <div className="space-y-2">
+                      <label
+                        htmlFor="subject"
+                        className="text-sm font-medium text-gray-700"
+                      >
+                        Subject
+                      </label>
+                      <Controller
+                        name="subject"
+                        control={control}
+                        rules={{ required: 'Subject is required' }}
+                        render={({ field: { onChange, value, ...field }, fieldState }) => (
+                          <>
+                            <input
+                              {...field}
+                              id="subject"
+                              data-testid="subject-input"
+                              className="flex h-10 w-full rounded-md border"
+                              placeholder="Enter subject..."
+                              value={value}
+                              onChange={(e) => {
+                                onChange(e);
+                                console.log('📝 Subject onChange triggered:', {
+                                  value: e.target.value,
+                                  name: e.target.name,
+                                  formState: formState,
+                                  currentValues: getValues()
+                                });
+                              }}
+                            />
+                            {fieldState.error && (
+                              <p className="text-sm text-red-600 mt-1">
+                                {fieldState.error.message}
+                              </p>
+                            )}
+                          </>
+                        )}
+                      />
                     </div>
                   </div>
                 );
@@ -343,16 +344,27 @@ export function RFIForm() {
                     >
                       {field.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
                     </label>
-                    <Input
-                      id={field}
-                      {...form.register(field)}
-                      placeholder={`Enter ${field.replace(/_/g, ' ')}...`}
+                    <Controller
+                      name={field}
+                      control={control}
+                      render={({ field: { onChange, value, ...field }, fieldState }) => (
+                        <>
+                          <Input
+                            {...field}
+                            id={field.name}
+                            value={value}
+                            onChange={onChange}
+                            placeholder={`Enter ${field.name.split('_').join(' ')}...`}
+                            data-testid={`${field.name}-input`}
+                          />
+                          {fieldState.error && (
+                            <p className="text-sm text-red-600 mt-1">
+                              {fieldState.error.message}
+                            </p>
+                          )}
+                        </>
+                      )}
                     />
-                    {form.formState.errors[field] && (
-                      <p className="text-sm text-red-600 mt-1">
-                        {form.formState.errors[field]?.message}
-                      </p>
-                    )}
                   </div>
                 </div>
               );
@@ -366,21 +378,31 @@ export function RFIForm() {
         <Button
           type="button"
           variant="outline"
-          onClick={handleSaveDraft}
-          disabled={isSubmitting}
-        >
-          Save as Draft
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
           onClick={handleReset}
           disabled={isSubmitting}
         >
           {showResetConfirm ? 'Confirm Reset' : 'Reset Form'}
         </Button>
-        <Button type="submit" disabled={isSubmitting}>
-          {isSubmitting ? 'Creating...' : 'Create RFI'}
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={handleSaveDraft}
+          disabled={isSubmitting}
+        >
+          Save Draft
+        </Button>
+        <Button
+          type="submit"
+          disabled={isSubmitting || !isValid}
+        >
+          {isSubmitting ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Creating RFI...
+            </>
+          ) : (
+            'Create RFI'
+          )}
         </Button>
       </div>
     </form>

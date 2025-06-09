@@ -29,8 +29,23 @@ const localStorageMock = {
   setItem: jest.fn(),
   removeItem: jest.fn(),
   clear: jest.fn(),
+  key: jest.fn(),
+  length: 0,
 };
+Object.defineProperty(window, 'localStorage', {
+  value: localStorageMock,
+  writable: true,
+});
 global.localStorage = localStorageMock;
+
+beforeEach(() => {
+  localStorageMock.getItem.mockClear();
+  localStorageMock.setItem.mockClear();
+  localStorageMock.removeItem.mockClear();
+  localStorageMock.clear.mockClear();
+  localStorageMock.key.mockClear();
+  localStorageMock.length = 0;
+});
 
 // Mock window.matchMedia
 Object.defineProperty(window, 'matchMedia', {
@@ -45,4 +60,10 @@ Object.defineProperty(window, 'matchMedia', {
     removeEventListener: jest.fn(),
     dispatchEvent: jest.fn(),
   })),
-}); 
+});
+
+global.fetch = jest.fn(() =>
+  Promise.resolve({
+    json: () => Promise.resolve({}),
+  })
+); 

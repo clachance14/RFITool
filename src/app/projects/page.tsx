@@ -8,24 +8,13 @@ import { Button } from '@/components/ui/button';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 
 export default function ProjectsPage() {
-  const { getProjects, deleteProject, loading, error } = useProjects();
-  const [projects, setProjects] = useState<Project[]>([]);
-
-  useEffect(() => {
-    const fetchProjects = async () => {
-      const response = await getProjects();
-      if (response.data) {
-        setProjects(response.data);
-      }
-    };
-    fetchProjects();
-  }, [getProjects]);
+  const { projects, deleteProject, loading, error } = useProjects();
 
   const handleDelete = async (id: string) => {
     if (window.confirm('Are you sure you want to delete this project?')) {
       const response = await deleteProject(id);
       if (!response.error) {
-        setProjects(projects.filter(project => project.id !== id));
+        // Projects will be automatically updated by the hook
       }
     }
   };
@@ -87,26 +76,22 @@ export default function ProjectsPage() {
               {projects.map((project) => (
                 <tr key={project.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">{project.name}</div>
-                    <div className="text-sm text-gray-500">{project.description}</div>
+                    <div className="text-sm font-medium text-gray-900">{project.project_name}</div>
+                    <div className="text-sm text-gray-500">{project.project_description || 'No description'}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {project.client_name}
+                    {project.client_company_name}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {project.project_number}
+                    {project.job_contract_number}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full
-                      ${project.status === 'active' ? 'bg-green-100 text-green-800' : ''}
-                      ${project.status === 'completed' ? 'bg-gray-100 text-gray-800' : ''}
-                      ${project.status === 'on_hold' ? 'bg-yellow-100 text-yellow-800' : ''}
-                    `}>
-                      {project.status.charAt(0).toUpperCase() + project.status.slice(1)}
+                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                      Active
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {new Date(project.start_date).toLocaleDateString()}
+                    {project.start_date ? new Date(project.start_date).toLocaleDateString() : 'Not set'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <Link

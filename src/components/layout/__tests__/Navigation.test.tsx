@@ -1,24 +1,39 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import Navigation from '../Navigation';
-import { MemoryRouter } from 'react-router-dom';
 
-// Mock usePathname from next/navigation
+// Mock next/navigation
+const mockPush = jest.fn();
+const mockReplace = jest.fn();
+const mockPrefetch = jest.fn();
+const mockBack = jest.fn();
+const mockForward = jest.fn();
+const mockRefresh = jest.fn();
+
 jest.mock('next/navigation', () => ({
+  useRouter: () => ({
+    push: mockPush,
+    replace: mockReplace,
+    prefetch: mockPrefetch,
+    back: mockBack,
+    forward: mockForward,
+    refresh: mockRefresh,
+  }),
   usePathname: jest.fn(),
 }));
+
 const { usePathname } = require('next/navigation');
 
 const setup = (initialPath = '/rfis') => {
   usePathname.mockReturnValue(initialPath);
-  render(
-    <MemoryRouter initialEntries={[initialPath]}>
-      <Navigation />
-    </MemoryRouter>
-  );
+  render(<Navigation />);
 };
 
 describe('Navigation', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
   it('renders navigation items', () => {
     setup();
     expect(screen.getByTestId('nav-dashboard')).toBeInTheDocument();
@@ -47,12 +62,11 @@ describe('Navigation', () => {
     expect(screen.getByTestId('nav-notifications')).toHaveAttribute('href', '/notifications');
   });
 
-  it('handles click events', () => {
+  it('handles logout click', () => {
     setup();
     const logoutButton = screen.getByTestId('nav-logout');
-    const consoleSpy = jest.spyOn(console, 'log');
-    logoutButton.click();
-    expect(consoleSpy).toHaveBeenCalledWith('Logout clicked');
+    fireEvent.click(logoutButton);
+    expect(mockPush).toHaveBeenCalledWith('/login');
   });
 
   it('has accessible navigation landmarks and keyboard navigation', () => {

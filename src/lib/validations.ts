@@ -5,12 +5,12 @@ const textField = z.string().min(1, 'Subject is required').max(500, 'Subject too
 const optionalTextField = z.string().max(500, 'Maximum 500 characters allowed').optional();
 const optionalLongTextField = z.string().max(2000, 'Maximum 2000 characters allowed').optional();
 
-// Base RFI schema with common fields
+// Base RFI schema with required fields
 const baseRFISchema = {
   subject: textField,
-  to_recipient: z.string().min(1, 'To Recipient is required').max(500, 'Maximum 500 characters allowed'),
-  reason_for_rfi: z.string().min(1, 'Reason for RFI is required').max(500, 'Maximum 500 characters allowed'),
-  project_id: z.string().uuid('Invalid project ID'),
+  reason_for_rfi: z.string().min(1, 'Reason for RFI is required'),
+  contractor_question: z.string().min(1, 'Contractor question is required'),
+  project_id: z.string().uuid('Invalid project ID').min(1, 'Project selection is required'),
   status: z.enum(['draft', 'sent', 'responded', 'overdue'], {
     errorMap: () => ({ message: 'Invalid status value' }),
   }),
@@ -21,20 +21,32 @@ const baseRFISchema = {
 
 // Optional fields schema
 const optionalRFIFields = {
-  company: optionalTextField,
-  contract_number: optionalTextField,
+  // Project context fields
+  discipline: z.string().max(255, 'Maximum 255 characters allowed').optional(),
+  system: z.string().max(255, 'Maximum 255 characters allowed').optional(),
+  work_impact: z.string().max(255, 'Maximum 255 characters allowed').optional(),
+  cost_impact: z.preprocess((val) => {
+    if (val === '' || val === null || val === undefined) return undefined;
+    const num = Number(val);
+    return isNaN(num) ? undefined : num;
+  }, z.number().positive().optional()),
+  schedule_impact: z.string().optional(),
+  test_package: z.string().max(255, 'Maximum 255 characters allowed').optional(),
+  schedule_id: z.string().max(255, 'Maximum 255 characters allowed').optional(),
+  block_area: z.string().max(255, 'Maximum 255 characters allowed').optional(),
+  
+  // Solution and additional fields
+  contractor_proposed_solution: optionalLongTextField,
+  
+  // Response fields
+  client_response: z.string().optional(),
+  client_response_submitted_by: z.string().max(255, 'Maximum 255 characters allowed').optional(),
+  client_cm_approval: z.string().max(255, 'Maximum 255 characters allowed').optional(),
+  
+  // System fields
+  to_recipient: z.string().max(500, 'Maximum 500 characters allowed').optional(),
   revision: z.string().default('0'),
   date_created: z.string().datetime().optional(),
-  work_impact: optionalLongTextField,
-  cost_impact: optionalLongTextField,
-  schedule_impact: optionalLongTextField,
-  discipline: optionalTextField,
-  system: optionalTextField,
-  sub_system: optionalTextField,
-  schedule_id: optionalTextField,
-  test_package: optionalTextField,
-  contractor_proposed_solution: optionalLongTextField,
-  associated_reference_documents: optionalLongTextField,
   requested_by: optionalTextField,
   reviewed_by: optionalTextField,
 };
@@ -47,12 +59,12 @@ export const createRFISchema = z.object({
   (data) => {
     // Additional validation: If status is 'sent', ensure required fields are present
     if (data.status === 'sent') {
-      return !!data.to_recipient && !!data.reason_for_rfi;
+      return !!data.reason_for_rfi && !!data.contractor_question;
     }
     return true;
   },
   {
-    message: 'Recipient and reason are required when sending an RFI',
+    message: 'Reason for RFI and contractor question are required when sending an RFI',
     path: ['status'],
   }
 );
@@ -97,4 +109,45 @@ export function formatValidationErrors(error: z.ZodError): ValidationError[] {
     field: err.path.join('.'),
     message: err.message,
   }));
-} 
+}
+
+export const createProjectSchema = z.object({
+  project_name: z.string().min(1, 'Project name is required').max(200),
+  job_contract_number: z.string().min(1, 'Contract number is required').max(100),
+  client_company_name: z.string().min(1, 'Client company is required').max(200),
+  project_manager_contact: z.string().min(1, 'Contact is required'),
+  
+  // Make these truly optional by transforming empty strings to undefined
+  location: z.string().optional().or(z.literal('')).transform(val => val === '' ? undefined : val),
+  project_type: z.enum(['mechanical', 'civil', 'ie', 'other']).optional().or(z.literal('')).transform(val => val === '' ? undefined : val),
+  contract_value: z.preprocess((val) => {
+    const num = Number(val);
+    return isNaN(num) ? undefined : num;
+  }, z.number().positive().optional()),
+  start_date: z.string().optional().or(z.literal('')).transform(val => val === '' ? undefined : val),
+  expected_completion: z.string().optional().or(z.literal('')).transform(val => val === '' ? undefined : val),
+  project_description: z.string().max(1000).optional().or(z.literal('')).transform(val => val === '' ? undefined : val),
+  
+  default_urgency: z.enum(['urgent', 'non-urgent']),
+  
+  // Handle standard_recipients array with email validation
+  standard_recipients: z.array(z.string())
+    .transform(arr => arr.filter(email => email && email.trim() !== ''))
+    .pipe(
+      z.array(
+        z.string()
+          .email('Invalid email address')
+      )
+      .min(1, 'At least one recipient required')
+    ),
+  
+  project_disciplines: z.array(z.string()).optional(),
+});
+
+export const updateProjectSchema = createProjectSchema.partial().extend({
+  id: z.string().uuid(),
+});
+
+// Export types
+export type CreateProjectInput = z.infer<typeof createProjectSchema>;
+export type UpdateProjectInput = z.infer<typeof updateProjectSchema>; 

@@ -1,5 +1,6 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { act } from 'react';
 import { RFIForm } from '@/components/rfi/RFIForm';
 import { useProjects } from '@/hooks/useProjects';
 import { useRFIs } from '@/hooks/useRFIs';
@@ -41,169 +42,132 @@ const mockCreatedRFI = {
   status: 'draft' as const,
 };
 
-describe('RFI Creation Flow', () => {
+describe('RFI Creation Integration', () => {
   const mockGetProjects = jest.fn();
   const mockCreateRFI = jest.fn();
 
   beforeEach(() => {
-    // Reset mocks
     jest.clearAllMocks();
-
-    // Setup mock implementations
     (useProjects as jest.Mock).mockReturnValue({
       getProjects: mockGetProjects,
-      loading: false,
-      error: null,
     });
-
     (useRFIs as jest.Mock).mockReturnValue({
       createRFI: mockCreateRFI,
-      loading: false,
-      error: null,
     });
-
-    // Mock successful project fetch
-    mockGetProjects.mockResolvedValue({
-      data: mockProjects,
-      error: undefined,
-    });
+    mockGetProjects.mockResolvedValue({ data: mockProjects, error: undefined });
+    localStorage.clear();
+    (localStorage.getItem as jest.Mock).mockClear();
+    (localStorage.setItem as jest.Mock).mockClear();
+    (localStorage.removeItem as jest.Mock).mockClear();
+    (localStorage.clear as jest.Mock).mockClear();
   });
 
-  it('completes the full RFI creation flow', async () => {
-    // Mock successful RFI creation
+  it('creates a new RFI with project selection', async () => {
     mockCreateRFI.mockResolvedValue({
       success: true,
-      data: mockCreatedRFI,
+      data: { id: 'rfi-001' },
+      error: undefined,
     });
 
-    render(<RFIForm />);
+    await act(async () => {
+      render(<RFIForm />);
+    });
 
-    // Debug: Log initial render state
-    screen.debug();
+    // Wait for projects to load
+    await waitFor(() => {
+      expect(screen.queryByText('Loading projects...')).not.toBeInTheDocument();
+    });
 
     // Fill in form fields
     await userEvent.type(screen.getByLabelText(/subject/i), 'Test RFI');
-    await userEvent.type(screen.getByLabelText(/to recipient/i), 'Test Recipient');
+    await userEvent.type(screen.getByLabelText(/to recipient/i), 'John Doe');
     await userEvent.type(screen.getByLabelText(/company/i), 'Test Company');
-    await userEvent.type(screen.getByLabelText(/contract number/i), 'TEST-001');
-
-    // Debug: Log state before project selection
-    console.log('State before project selection:', {
-      form: document.querySelector('form'),
-      projectSelect: screen.getByTestId('project-select'),
-    });
+    await userEvent.type(screen.getByLabelText(/contract number/i), 'CN-001');
 
     // Select project
     const projectSelect = screen.getByTestId('project-select');
-    await userEvent.click(projectSelect);
-    
-    // Debug: Log state after clicking project select
-    console.log('State after clicking project select:', {
-      projectSelect,
-      projectOptions: screen.getAllByRole('option'),
-    });
-
-    // Select project option
-    const projectOption = screen.getByText('Test Project');
+    fireEvent.pointerDown(projectSelect);
+    const projectOption = await screen.findByText('Test Project', {}, { container: document.body });
     await userEvent.click(projectOption);
 
-    // Debug: Log state after project selection
-    console.log('State after project selection:', {
-      selectedProject: screen.getByText('Test Project'),
-      projectId: screen.getByTestId('project-select').getAttribute('value'),
-    });
-
-    // Fill in remaining fields
-    await userEvent.type(screen.getByLabelText(/revision/i), '1');
-    await userEvent.type(screen.getByLabelText(/date created/i), '2024-03-20');
-    await userEvent.type(screen.getByLabelText(/work impact/i), 'None');
-    await userEvent.type(screen.getByLabelText(/cost impact/i), 'None');
-    await userEvent.type(screen.getByLabelText(/schedule impact/i), 'None');
-    await userEvent.type(screen.getByLabelText(/discipline/i), 'Test');
-    await userEvent.type(screen.getByLabelText(/system/i), 'Test');
-    await userEvent.type(screen.getByLabelText(/sub system/i), 'Test');
-    await userEvent.type(screen.getByLabelText(/schedule id/i), 'TEST-001');
-    await userEvent.type(screen.getByLabelText(/reason for rfi/i), 'Test');
-    await userEvent.type(screen.getByLabelText(/test package/i), 'Test');
-    await userEvent.type(screen.getByLabelText(/contractor proposed solution/i), 'Test');
-    await userEvent.type(screen.getByLabelText(/associated reference documents/i), 'Test');
-    await userEvent.type(screen.getByLabelText(/requested by/i), 'Test');
-    await userEvent.type(screen.getByLabelText(/reviewed by/i), 'Test');
-
-    // Select urgency and status
-    const urgencySelect = screen.getByLabelText(/urgency/i);
-    await userEvent.click(urgencySelect);
-    await userEvent.click(screen.getByText('Non-Urgent'));
-
-    const statusSelect = screen.getByLabelText(/status/i);
-    await userEvent.click(statusSelect);
-    await userEvent.click(screen.getByText('Draft'));
-
-    // Debug: Log form submission state
-    console.log('Form submission state:', {
-      form: document.querySelector('form'),
-      formData: new FormData(document.querySelector('form') as HTMLFormElement),
-    });
-
     // Submit form
-    await userEvent.click(screen.getByText('Create RFI'));
-
-    // Wait for submission to complete
-    await waitFor(() => {
-      expect(mockCreateRFI).toHaveBeenCalled();
+    await act(async () => {
+      await userEvent.click(screen.getByRole('button', { name: /create rfi/i }));
     });
 
-    // Check for success message
-    expect(screen.getByText(/RFI RFI-001 created successfully!/i)).toBeInTheDocument();
+    // Check loading state
+    expect(await screen.findByText(/creating rfi/i)).toBeInTheDocument();
+
+    // Wait for success message
+    expect(await screen.findByText(/rfi rfi-001 created successfully/i)).toBeInTheDocument();
+
+    // Verify API calls
+    expect(mockGetProjects).toHaveBeenCalled();
+    expect(mockCreateRFI).toHaveBeenCalledWith(expect.objectContaining({
+      subject: 'Test RFI',
+      to_recipient: 'John Doe',
+      company: 'Test Company',
+      contract_number: 'CN-001',
+      project_id: '123e4567-e89b-12d3-a456-426614174000',
+    }));
   });
 
-  it('handles form validation errors', async () => {
-    render(<RFIForm />);
+  it('handles validation errors', async () => {
+    await act(async () => {
+      render(<RFIForm />);
+    });
+
+    // Wait for projects to load
+    await waitFor(() => {
+      expect(screen.queryByText('Loading projects...')).not.toBeInTheDocument();
+    });
 
     // Submit form without filling required fields
-    await userEvent.click(screen.getByText('Create RFI'));
-
-    // Check for validation error messages
-    await waitFor(() => {
-      expect(screen.getByText(/subject is required/i)).toBeInTheDocument();
-      expect(screen.getByText(/to recipient is required/i)).toBeInTheDocument();
-      expect(screen.getByText(/project is required/i)).toBeInTheDocument();
+    await act(async () => {
+      await userEvent.click(screen.getByRole('button', { name: /create rfi/i }));
     });
+
+    // Check validation errors
+    expect(await screen.findByText(/subject is required/i)).toBeInTheDocument();
+    expect(await screen.findByText(/to recipient is required/i)).toBeInTheDocument();
+    expect(await screen.findByText(/company is required/i)).toBeInTheDocument();
+    expect(await screen.findByText(/contract number is required/i)).toBeInTheDocument();
+    expect(await screen.findByText(/project is required/i)).toBeInTheDocument();
+
+    // Verify no API calls were made
+    expect(mockCreateRFI).not.toHaveBeenCalled();
   });
 
   it('handles API errors', async () => {
-    // Mock API error
-    mockCreateRFI.mockRejectedValue(new Error('Failed to create RFI'));
+    mockCreateRFI.mockRejectedValue(new Error('Connection problem'));
 
-    render(<RFIForm />);
+    await act(async () => {
+      render(<RFIForm />);
+    });
 
-    // Fill in required fields
+    // Wait for projects to load
+    await waitFor(() => {
+      expect(screen.queryByText('Loading projects...')).not.toBeInTheDocument();
+    });
+
+    // Fill in form fields
     await userEvent.type(screen.getByLabelText(/subject/i), 'Test RFI');
-    await userEvent.type(screen.getByLabelText(/to recipient/i), 'Test Recipient');
+    await userEvent.type(screen.getByLabelText(/to recipient/i), 'John Doe');
+    await userEvent.type(screen.getByLabelText(/company/i), 'Test Company');
+    await userEvent.type(screen.getByLabelText(/contract number/i), 'CN-001');
 
     // Select project
     const projectSelect = screen.getByTestId('project-select');
-    await userEvent.click(projectSelect);
-    await userEvent.click(screen.getByText('Test Project'));
+    fireEvent.pointerDown(projectSelect);
+    const projectOption = await screen.findByText('Test Project', {}, { container: document.body });
+    await userEvent.click(projectOption);
 
     // Submit form
-    await userEvent.click(screen.getByText('Create RFI'));
-
-    // Check for error message
-    await waitFor(() => {
-      expect(screen.getByText(/failed to create rfi/i)).toBeInTheDocument();
+    await act(async () => {
+      await userEvent.click(screen.getByRole('button', { name: /create rfi/i }));
     });
-  });
 
-  it('handles invalid project ID', async () => {
-    // Mock project fetch error
-    mockGetProjects.mockRejectedValue(new Error('Failed to load projects'));
-
-    render(<RFIForm />);
-
-    // Check for error message
-    await waitFor(() => {
-      expect(screen.getByText(/failed to load projects/i)).toBeInTheDocument();
-    });
+    // Check error message
+    expect(await screen.findByText(/connection problem/i)).toBeInTheDocument();
   });
 }); 

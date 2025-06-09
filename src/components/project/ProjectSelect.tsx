@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useProjects } from '@/hooks/useProjects';
-import { Project } from '@/lib/types';
+import type { Project } from '@/lib/types';
 import {
   SelectComponent,
   SelectContent,
@@ -13,12 +13,13 @@ import {
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 
-interface ProjectSelectProps {
+export interface ProjectSelectProps {
   value: string;
   onChange: (value: string) => void;
   label?: string;
   required?: boolean;
   'data-testid'?: string;
+  error?: string;
 }
 
 export default function ProjectSelect({
@@ -27,31 +28,9 @@ export default function ProjectSelect({
   label = 'Project',
   required = false,
   'data-testid': testId,
+  error,
 }: ProjectSelectProps) {
-  const { getProjects } = useProjects();
-  const [projectsState, setProjectsState] = useState<Project[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchProjects = async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const response = await getProjects();
-      if (response.data) {
-        setProjectsState(response.data);
-      }
-    } catch (err) {
-      console.error('Error fetching projects:', err);
-      setError('Failed to load projects');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchProjects();
-  }, [getProjects]);
+  const { projects, loading: isLoading, error: errorMessage } = useProjects();
 
   if (isLoading) {
     return (
@@ -64,29 +43,18 @@ export default function ProjectSelect({
     );
   }
 
-  if (error) {
+  if (errorMessage) {
     return (
       <div className="space-y-2" data-testid={testId}>
         <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
           {label}
         </label>
-        <div className="text-sm text-red-600">{error}</div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            setIsLoading(true);
-            setError(null);
-            fetchProjects();
-          }}
-        >
-          Retry
-        </Button>
+        <div className="text-sm text-red-600">{errorMessage}</div>
       </div>
     );
   }
 
-  if (!projectsState || projectsState.length === 0) {
+  if (!projects || projects.length === 0) {
     return (
       <div className="space-y-2" data-testid={testId}>
         <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
@@ -102,22 +70,21 @@ export default function ProjectSelect({
       <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
         {label}
       </label>
-      <SelectComponent
-        value={value}
-        onValueChange={onChange}
-        required={required}
-      >
-        <SelectTrigger>
+      <SelectComponent value={value} onValueChange={onChange} required>
+        <SelectTrigger data-testid="select-trigger">
           <SelectValue placeholder="Select a project" />
         </SelectTrigger>
         <SelectContent>
-          {projectsState.map((project) => (
-            <SelectItem key={project.id} value={project.id}>
-              {project.name}
+          {projects.map((project) => (
+            <SelectItem key={project.id} value={project.id} data-testid={`select-item-${project.id}`}>
+              {project.project_name} - {project.job_contract_number}
             </SelectItem>
           ))}
         </SelectContent>
       </SelectComponent>
+      {error && (
+        <p className="text-sm text-red-600 mt-1">{error}</p>
+      )}
     </div>
   );
 } 
