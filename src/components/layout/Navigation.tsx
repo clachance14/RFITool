@@ -28,19 +28,19 @@ export default function Navigation() {
       {/* Desktop Navigation */}
       <nav className="hidden md:flex flex-col w-64 bg-white border-r border-gray-200 p-6 min-h-screen" data-testid="desktop-nav">
         <div className="mb-8 text-2xl font-bold tracking-wide text-gray-800">
-          RFI Ware
+          RFITrak
         </div>
         <ul className="flex-1 space-y-2" role="navigation" aria-label="Main navigation">
           <li>
             <Link
-              href="/rfis"
+              href="/dashboard"
               className={`flex items-center px-4 py-3 rounded-lg text-lg font-medium transition-colors ${
-                pathname === '/rfis'
+                pathname === '/dashboard'
                   ? 'bg-gray-100 text-blue-600 border-l-4 border-blue-600'
                   : 'text-gray-700 hover:bg-gray-50'
               }`}
               data-testid="nav-dashboard"
-              aria-current={pathname === '/rfis' ? 'page' : undefined}
+              aria-current={pathname === '/dashboard' ? 'page' : undefined}
             >
               <LayoutDashboard className="mr-3 h-6 w-6" />
               Dashboard
@@ -90,12 +90,12 @@ export default function Navigation() {
       {/* Mobile Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 z-50 flex md:hidden bg-white border-t border-gray-200 shadow p-1 justify-around" data-testid="mobile-nav">
         <Link
-          href="/rfis"
+          href="/dashboard"
           className={`flex flex-col items-center justify-center px-2 py-1 rounded transition-colors ${
-            pathname === '/rfis' ? 'text-blue-600' : 'text-gray-500 hover:text-blue-600'
+            pathname === '/dashboard' ? 'text-blue-600' : 'text-gray-500 hover:text-blue-600'
           }`}
           data-testid="mobile-nav-dashboard"
-          aria-current={pathname === '/rfis' ? 'page' : undefined}
+          aria-current={pathname === '/dashboard' ? 'page' : undefined}
         >
           <LayoutDashboard className="h-6 w-6 mb-1" />
           <span className="text-xs font-medium">Dashboard</span>

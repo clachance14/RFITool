@@ -1,4 +1,4 @@
-# Updated Technical Specification for RFI Ware
+# Updated Technical Specification for RFITrak
 *Based on real implementation progress and practical contractor workflow*
 
 ## 1. Project Overview (UPDATED)

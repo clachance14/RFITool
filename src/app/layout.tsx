@@ -5,8 +5,11 @@ import Header from '@/components/layout/Header'
 import { Toaster } from 'react-hot-toast'
 
 export const metadata: Metadata = {
-  title: 'RFI Ware',
-  description: 'Professional RFI management for general contractors',
+  title: {
+    template: '%s | RFITrak',
+    default: 'RFITrak - RFI Management for Contractors',
+  },
+  description: 'An RFI management tool for general contractors.',
 }
 
 export default function RootLayout({
