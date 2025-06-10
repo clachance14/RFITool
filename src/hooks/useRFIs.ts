@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useCallback, useMemo } from 'react';
-import { RFI, CreateRFIInput, UpdateRFIInput, RFIStatus, RFICostItem, RFICostType } from '@/lib/types';
+import { RFI, CreateRFIInput, UpdateRFIInput, RFIStatus, RFICostItem, RFICostType, RFIAttachment } from '@/lib/types';
 import { createRFISchema, updateRFISchema } from '@/lib/validations';
 import { supabase, handleSupabaseError } from '@/lib/supabase';
+import { uploadAttachment } from '@/lib/storage';
 
 // Types for the hook
 type RFIResponse = {
@@ -146,6 +147,38 @@ export function useRFIs() {
     }
   };
 
+  // Helper function to fetch attachments for an RFI
+  const fetchAttachments = async (rfiId: string): Promise<RFIAttachment[]> => {
+    try {
+      const { data, error } = await supabase
+        .from('rfi_attachments')
+        .select('*')
+        .eq('rfi_id', rfiId)
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        throw error;
+      }
+
+      // Generate public URLs for each attachment
+      const attachmentsWithUrls = (data || []).map(attachment => {
+        const { data: { publicUrl } } = supabase.storage
+          .from('rfi-attachments')
+          .getPublicUrl(attachment.file_path);
+
+        return {
+          ...attachment,
+          public_url: publicUrl
+        } as RFIAttachment;
+      });
+
+      return attachmentsWithUrls;
+    } catch (err) {
+      console.error('Error fetching attachments:', err);
+      return [];
+    }
+  };
+
   // CRUD Operations
   const createRFI = useCallback(async (data: CreateRFIInput): Promise<RFI> => {
     setLoading(true);
@@ -205,6 +238,61 @@ export function useRFIs() {
       
       console.log('✅ RFI created successfully:', rfiData);
       
+      // Upload attachments if any
+      let uploadedAttachments: RFIAttachment[] = [];
+      if (data.attachments && data.attachments.length > 0) {
+        console.log('📎 Uploading attachments:', data.attachments.length);
+        
+        const uploadPromises = data.attachments.map(async (file, index) => {
+          try {
+            const { url, path, error } = await uploadAttachment(file, rfiData.id);
+            if (error || !url || !path) {
+              console.error(`❌ Failed to upload file ${file.name}:`, error);
+              throw new Error(`Failed to upload ${file.name}: ${error}`);
+            }
+            
+            // Insert attachment record into database
+            const { data: attachmentData, error: attachmentError } = await supabase
+              .from('rfi_attachments')
+              .insert({
+                rfi_id: rfiData.id,
+                file_name: file.name,
+                file_path: path,
+                file_size_bytes: file.size,
+                file_type: file.type,
+                uploaded_by: user.id
+              })
+              .select()
+              .single();
+              
+            if (attachmentError) {
+              console.error(`❌ Failed to save attachment record for ${file.name}:`, attachmentError);
+              throw attachmentError;
+            }
+            
+            console.log(`✅ Attachment uploaded successfully: ${file.name}`);
+            
+            // Add public URL to attachment data
+            return {
+              ...attachmentData,
+              public_url: url
+            } as RFIAttachment;
+          } catch (error) {
+            console.error(`❌ Error uploading attachment ${file.name}:`, error);
+            throw error;
+          }
+        });
+        
+        try {
+          uploadedAttachments = await Promise.all(uploadPromises);
+          console.log('✅ All attachments uploaded successfully:', uploadedAttachments.length);
+        } catch (error) {
+          console.error('❌ Failed to upload some attachments:', error);
+          // Note: We could continue without attachments or throw - depends on requirements
+          // For now, let's continue and log the error
+        }
+      }
+      
       // Create cost items if there are any cost inputs
       await createCostItemsFromLegacyFields(rfiData.id, data);
       
@@ -227,7 +315,8 @@ export function useRFIs() {
         updated_at: rfiData.updated_at,
         response: rfiData.client_response,
         response_date: rfiData.date_responded,
-        attachments: [],
+        attachments: uploadedAttachments.map(att => att.file_name),
+        attachment_files: uploadedAttachments,
         cost_items: costItems,
         // Legacy cost fields for compatibility
         manhours: data.manhours,
@@ -267,10 +356,11 @@ export function useRFIs() {
         throw new Error(message);
       }
       
-      // Convert database RFIs to our RFI interface and fetch cost items
+      // Convert database RFIs to our RFI interface and fetch cost items and attachments
       const rfisWithCostItems: RFI[] = await Promise.all(
         (data || []).map(async (rfiData) => {
           const costItems = await fetchCostItems(rfiData.id);
+          const attachments = await fetchAttachments(rfiData.id);
           
           return {
             id: rfiData.id,
@@ -287,7 +377,8 @@ export function useRFIs() {
             updated_at: rfiData.updated_at,
             response: rfiData.client_response,
             response_date: rfiData.date_responded,
-            attachments: [],
+            attachments: attachments.map(att => att.file_name),
+            attachment_files: attachments,
             cost_items: costItems,
             // Calculate legacy cost fields from cost items for compatibility
             labor_costs: costItems.filter(item => item.cost_type === 'labor').reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0) || undefined,
@@ -331,8 +422,9 @@ export function useRFIs() {
         throw new Error(message);
       }
       
-      // Fetch cost items for this RFI
+      // Fetch cost items and attachments for this RFI
       const costItems = await fetchCostItems(id);
+      const attachments = await fetchAttachments(id);
       
       // Convert database RFI to our RFI interface
       const rfi: RFI = {
@@ -350,7 +442,8 @@ export function useRFIs() {
         updated_at: data.updated_at,
         response: data.client_response,
         response_date: data.date_responded,
-        attachments: [],
+        attachments: attachments.map(att => att.file_name),
+        attachment_files: attachments,
         cost_items: costItems,
         // Calculate legacy cost fields from cost items for compatibility
         labor_costs: costItems.filter(item => item.cost_type === 'labor').reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0) || undefined,

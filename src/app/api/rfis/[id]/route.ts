@@ -2,41 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import z from 'zod';
 import { RFI, UpdateRFIInput, ApiResponse, RFIStatus } from '@/lib/types';
 import { updateRFISchema } from '@/lib/validations';
-
-// Mock data for development (same as in main route)
-const mockRFIs: RFI[] = [
-  {
-    id: '1',
-    rfi_number: 'RFI-001',
-    project_id: '1',
-    subject: 'Foundation Design Clarification',
-    description: 'Need clarification on foundation design specifications',
-    status: 'draft',
-    priority: 'high',
-    assigned_to: null,
-    due_date: null,
-    created_by: 'user1',
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-    response: null,
-    response_date: null,
-    attachments: [],
-  },
-  // Add more mock RFIs as needed
-];
-
-// Mock attachments data
-const mockAttachments = [
-  {
-    id: '1',
-    rfi_id: '1',
-    filename: 'foundation-specs.pdf',
-    file_path: '/attachments/foundation-specs.pdf',
-    file_size: 1024,
-    file_type: 'application/pdf',
-    uploaded_at: new Date().toISOString(),
-  },
-];
+import { supabase } from '@/lib/supabase';
 
 // UUID validation schema
 const uuidSchema = z.string().regex(
@@ -52,11 +18,6 @@ function errorResponse(message: string, status: number = 400): NextResponse {
   );
 }
 
-// Helper function to find RFI by ID
-function findRFIById(id: string): RFI | undefined {
-  return mockRFIs.find(rfi => rfi.id === id);
-}
-
 // GET /api/rfis/[id]
 export async function GET(
   request: NextRequest,
@@ -69,23 +30,38 @@ export async function GET(
       return errorResponse('Invalid RFI ID format');
     }
 
-    // Find RFI
-    const rfi = findRFIById(validatedId.data);
-    if (!rfi) {
-      return errorResponse('RFI not found', 404);
+    // Fetch RFI from database
+    const { data: rfiData, error: rfiError } = await supabase
+      .from('rfis')
+      .select('*')
+      .eq('id', validatedId.data)
+      .single();
+
+    if (rfiError) {
+      if (rfiError.code === 'PGRST116') {
+        return errorResponse('RFI not found', 404);
+      }
+      console.error('Database error:', rfiError);
+      return errorResponse('Failed to fetch RFI', 500);
     }
 
-    // Get attachments for RFI
-    const attachments = mockAttachments.filter(
-      attachment => attachment.rfi_id === rfi.id
-    );
+    // Fetch attachments for the RFI
+    const { data: attachments, error: attachmentError } = await supabase
+      .from('rfi_attachments')
+      .select('*')
+      .eq('rfi_id', validatedId.data);
+
+    if (attachmentError) {
+      console.error('Error fetching attachments:', attachmentError);
+      // Continue without attachments rather than failing
+    }
 
     // Return RFI with attachments
     return NextResponse.json({
       success: true,
       data: {
-        rfi,
-        attachments,
+        rfi: rfiData,
+        attachments: attachments || [],
       },
     });
   } catch (error) {
@@ -106,30 +82,36 @@ export async function PUT(
       return errorResponse('Invalid RFI ID format');
     }
 
-    // Find RFI
-    const rfi = findRFIById(validatedId.data);
-    if (!rfi) {
-      return errorResponse('RFI not found', 404);
-    }
-
     // Parse and validate request body
     const body = await request.json();
     const validatedData = updateRFISchema.safeParse(body);
     if (!validatedData.success) {
-      return errorResponse('Invalid RFI data');
+      return errorResponse('Invalid RFI data: ' + validatedData.error.message);
     }
 
-    // Update RFI
-    const updatedRFI: RFI = {
-      ...rfi,
-      ...validatedData.data,
-      updated_at: new Date().toISOString(),
-    };
+    // Get current user
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      return errorResponse('User not authenticated', 401);
+    }
 
-    // In a real implementation, we would update in the database here
-    const index = mockRFIs.findIndex(r => r.id === rfi.id);
-    if (index !== -1) {
-      mockRFIs[index] = updatedRFI;
+    // Update RFI in database
+    const { data: updatedRFI, error: updateError } = await supabase
+      .from('rfis')
+      .update({
+        ...validatedData.data,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', validatedId.data)
+      .select()
+      .single();
+
+    if (updateError) {
+      if (updateError.code === 'PGRST116') {
+        return errorResponse('RFI not found', 404);
+      }
+      console.error('Database update error:', updateError);
+      return errorResponse('Failed to update RFI: ' + updateError.message, 500);
     }
 
     // Return updated RFI
@@ -155,28 +137,27 @@ export async function DELETE(
       return errorResponse('Invalid RFI ID format');
     }
 
-    // Find RFI
-    const rfi = findRFIById(validatedId.data);
-    if (!rfi) {
-      return errorResponse('RFI not found', 404);
+    // Get current user
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      return errorResponse('User not authenticated', 401);
     }
 
-    // Soft delete by updating status to 'draft' (since 'deleted' is not a valid status)
-    const updatedRFI: RFI = {
-      ...rfi,
-      status: 'draft',
-      updated_at: new Date().toISOString(),
-    };
+    // Delete RFI from database
+    const { error: deleteError } = await supabase
+      .from('rfis')
+      .delete()
+      .eq('id', validatedId.data);
 
-    // In a real implementation, we would update in the database here
-    const index = mockRFIs.findIndex(r => r.id === rfi.id);
-    if (index !== -1) {
-      mockRFIs[index] = updatedRFI;
+    if (deleteError) {
+      console.error('Database delete error:', deleteError);
+      return errorResponse('Failed to delete RFI: ' + deleteError.message, 500);
     }
 
     // Return success response
     return NextResponse.json({
       success: true,
+      message: 'RFI deleted successfully',
     });
   } catch (error) {
     console.error('Error deleting RFI:', error);

@@ -155,29 +155,35 @@ export interface Database {
         Row: {
           id: string
           rfi_id: string
-          filename: string
+          file_name: string
           file_path: string
-          file_size: number
+          file_size_bytes: number
           file_type: string
-          uploaded_at: string
+          uploaded_by: string
+          public_url: string | null
+          created_at: string
         }
         Insert: {
           id?: string
           rfi_id: string
-          filename: string
+          file_name: string
           file_path: string
-          file_size: number
+          file_size_bytes: number
           file_type: string
-          uploaded_at?: string
+          uploaded_by: string
+          public_url?: string | null
+          created_at?: string
         }
         Update: {
           id?: string
           rfi_id?: string
-          filename?: string
+          file_name?: string
           file_path?: string
-          file_size?: number
+          file_size_bytes?: number
           file_type?: string
-          uploaded_at?: string
+          uploaded_by?: string
+          public_url?: string | null
+          created_at?: string
         }
       }
       notifications: {

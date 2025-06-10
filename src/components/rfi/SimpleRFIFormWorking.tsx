@@ -9,6 +9,8 @@ import type { CreateRFIInput } from '@/lib/types';
 import { useProjects } from '@/hooks/useProjects';
 import { useRFIs } from '@/hooks/useRFIs';
 import ProjectSelect from '@/components/project/ProjectSelect';
+import { FileUpload } from '@/components/ui/FileUpload';
+import { validateAttachmentFile } from '@/lib/storage';
 
 export function SimpleRFIFormWorking() {
   const router = useRouter();
@@ -18,6 +20,7 @@ export function SimpleRFIFormWorking() {
   const [submitMessage, setSubmitMessage] = useState<string>('');
   const [nextRFINumber, setNextRFINumber] = useState<string>('');
   const [hasCostImpact, setHasCostImpact] = useState<boolean>(false);
+  const [attachments, setAttachments] = useState<File[]>([]);
   const form = useForm<CreateRFIInput>({
     resolver: zodResolver(createRFISchema),
     defaultValues: {
@@ -197,13 +200,21 @@ export function SimpleRFIFormWorking() {
     try {
       setIsSubmitting(true);
       setSubmitMessage('');
-      const newRFI = await createRFI(data);
+      
+      // Add attachments to the form data
+      const dataWithAttachments = {
+        ...data,
+        attachments: attachments
+      };
+      
+      const newRFI = await createRFI(dataWithAttachments);
       
       // Show success message briefly, then navigate to the professional RFI view
       setSubmitMessage(`RFI created successfully! Redirecting to professional view...`);
       
       // Clean up form state
       form.reset();
+      setAttachments([]);
       localStorage.removeItem('working_rfi_draft');
       
       // Navigate to the professional RFI detail view after a brief delay
@@ -657,17 +668,17 @@ export function SimpleRFIFormWorking() {
           {/* Attachments Card */}
           <div className="bg-white rounded-lg border border-gray-200 p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Attachments</h3>
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-              <div className="text-gray-400 mb-2">
-                <svg className="mx-auto h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                </svg>
-              </div>
-              <p className="text-sm text-gray-500 mb-2">File upload coming soon</p>
-              <button type="button" className="text-xs text-blue-600 hover:text-blue-800" disabled>
-                Browse files
-              </button>
-            </div>
+            <FileUpload
+              files={attachments}
+              onFilesChange={(newFiles) => {
+                console.log('RFI Form: setAttachments called with:', newFiles);
+                setAttachments(newFiles);
+              }}
+              maxFiles={10}
+              maxFileSize={50}
+              acceptedFileTypes={[]}
+              placeholder="Click to upload files or drag and drop"
+            />
           </div>
 
           {/* Activity Feed Placeholder */}

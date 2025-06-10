@@ -51,6 +51,19 @@ export interface RFICostItem {
   created_at: string;
 }
 
+// RFI Attachment Interface
+export interface RFIAttachment {
+  id: string;
+  rfi_id: string;
+  file_name: string;
+  file_path: string;
+  file_size_bytes: number;
+  file_type: string;
+  created_at: string;
+  uploaded_by: string;
+  public_url?: string;
+}
+
 // RFI Interface
 export interface RFI {
   id: string;
@@ -68,6 +81,8 @@ export interface RFI {
   response: string | null;
   response_date: string | null;
   attachments: string[];
+  // Attachment objects with full details
+  attachment_files?: RFIAttachment[];
   // Cost Impact Details (legacy fields for compatibility)
   manhours?: number;
   labor_costs?: number;
@@ -82,7 +97,7 @@ export interface User {
   id: string;
   email: string;
   name?: string;
-  role: 'admin' | 'user';
+  role: 'owner' | 'admin' | 'rfi_user' | 'view_only' | 'client_collaborator';
   created_at: string;
   updated_at: string;
 }
@@ -99,7 +114,7 @@ export interface UserProfile {
   id: string;
   email: string;
   company_id: string;
-  role: 'admin' | 'user';
+  role: 'owner' | 'admin' | 'rfi_user' | 'view_only' | 'client_collaborator';
   created_at: string;
   updated_at: string;
 }
@@ -136,6 +151,8 @@ export interface CreateRFIInput {
   material_costs?: number;
   equipment_costs?: number;
   subcontractor_costs?: number;
+  // Attachments
+  attachments?: File[];
 }
 
 export interface UpdateRFIInput {

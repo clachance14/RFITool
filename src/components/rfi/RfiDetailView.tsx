@@ -4,10 +4,115 @@ import React, { useState } from 'react';
 import { format } from 'date-fns';
 import { useProjects } from '@/hooks/useProjects';
 import { useRFIs } from '@/contexts/RFIContext';
-import type { RFI } from '@/lib/types';
+import type { RFI, RFIAttachment } from '@/lib/types';
 
 interface RfiDetailViewProps {
   rfi: RFI;
+}
+
+interface AttachmentPreviewModalProps {
+  attachment: RFIAttachment | null;
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+function AttachmentPreviewModal({ attachment, isOpen, onClose }: AttachmentPreviewModalProps) {
+  if (!isOpen || !attachment || !attachment.public_url) return null;
+
+  const isImage = (fileType: string) => {
+    return fileType?.startsWith('image/') || fileType?.includes('image');
+  };
+
+  const isPDF = (fileType: string) => {
+    return fileType === 'application/pdf' || fileType?.includes('pdf');
+  };
+
+  const handleDownload = () => {
+    if (attachment.public_url) {
+      const a = document.createElement('a');
+      a.href = attachment.public_url;
+      a.download = attachment.file_name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-7xl max-h-[95vh] w-full h-full sm:h-auto flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between p-3 border-b">
+          <div className="flex items-center space-x-2">
+            <h3 className="text-lg font-semibold text-gray-900 truncate">{attachment.file_name}</h3>
+            <span className="text-sm text-gray-500">
+              ({attachment.file_size_bytes ? (attachment.file_size_bytes / 1024 / 1024).toFixed(2) : '0'} MB)
+            </span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={handleDownload}
+              className="flex items-center space-x-1 px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <span>Download</span>
+            </button>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-hidden p-2">
+          {isImage(attachment.file_type || '') ? (
+            <div className="flex justify-center h-full">
+              <img
+                src={attachment.public_url}
+                alt={attachment.file_name}
+                className="max-w-full max-h-full object-contain rounded"
+              />
+            </div>
+          ) : isPDF(attachment.file_type || '') ? (
+            <div className="w-full h-full">
+              <iframe
+                src={attachment.public_url}
+                className="w-full h-full border-0"
+                title={attachment.file_name}
+                style={{ minHeight: 'calc(95vh - 80px)' }}
+              />
+            </div>
+          ) : (
+            <div className="text-center py-12">
+              <svg className="w-16 h-16 text-gray-400 mx-auto mb-4" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
+              </svg>
+              <h4 className="text-lg font-medium text-gray-900 mb-2">Preview not available</h4>
+              <p className="text-gray-600 mb-4">
+                This file type cannot be previewed. You can download it to view the contents.
+              </p>
+              <button
+                onClick={handleDownload}
+                className="inline-flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <span>Download File</span>
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function RfiDetailView({ rfi }: RfiDetailViewProps) {
@@ -17,8 +122,58 @@ export function RfiDetailView({ rfi }: RfiDetailViewProps) {
   const [responseText, setResponseText] = useState(rfi.response || '');
   const [submittedBy, setSubmittedBy] = useState('');
   const [cmApproval, setCmApproval] = useState('');
+  const [previewAttachment, setPreviewAttachment] = useState<RFIAttachment | null>(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   
   const project = projects.find(p => p.id === rfi.project_id);
+
+  const openPreview = (attachment: RFIAttachment) => {
+    setPreviewAttachment(attachment);
+    setIsPreviewOpen(true);
+  };
+
+  const closePreview = () => {
+    setIsPreviewOpen(false);
+    setPreviewAttachment(null);
+  };
+
+  const handlePrintRFI = () => {
+    window.print();
+  };
+
+  const handlePrintWithAttachments = () => {
+    // First print the RFI
+    window.print();
+    
+    // Then open each attachment in a new tab for printing
+    setTimeout(() => {
+      if (rfi.attachment_files && rfi.attachment_files.length > 0) {
+        rfi.attachment_files.forEach((attachment, index) => {
+          if (attachment.public_url) {
+            setTimeout(() => {
+              const printWindow = window.open(attachment.public_url, '_blank');
+              if (printWindow) {
+                printWindow.addEventListener('load', () => {
+                  setTimeout(() => {
+                    printWindow.print();
+                  }, 500);
+                });
+              }
+            }, index * 1000); // Stagger opening to avoid browser blocking
+          }
+        });
+      }
+    }, 1000);
+  };
+
+  // Helper function to format file size
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
 
   const handleSubmitResponse = async () => {
     if (!responseText.trim()) return;
@@ -36,8 +191,168 @@ export function RfiDetailView({ rfi }: RfiDetailViewProps) {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 py-8">
-      <div className="max-w-4xl mx-auto px-4">
+    <>
+      {/* Print Styles */}
+      <style jsx global>{`
+        @page {
+          margin: 0.25in !important;
+          size: letter;
+        }
+        
+        @media print {
+          /* Reset everything for print */
+          html, body {
+            margin: 0 !important;
+            padding: 0 !important;
+            background: white !important;
+            overflow: visible !important;
+            font-size: 12px !important;
+            line-height: 1.3 !important;
+          }
+          
+          /* Hide everything except our print container */
+          body * {
+            visibility: hidden;
+          }
+          
+          /* Show only the RFI print container and its contents */
+          .rfi-print-container, 
+          .rfi-print-container * {
+            visibility: visible;
+          }
+          
+          /* Position the print container to fill the available page space */
+          .rfi-print-container {
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            height: 100vh !important;
+            max-height: 100vh !important;
+            background: white !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: hidden !important;
+            transform: scale(0.75) !important;
+            transform-origin: top left !important;
+            page-break-after: avoid !important;
+          }
+          
+          /* Clean up the container styling */
+          .rfi-print-container .bg-gray-100 { 
+            background-color: white !important; 
+            padding: 0 !important;
+          }
+          .rfi-print-container .shadow-lg { box-shadow: none !important; }
+          .rfi-print-container .border { border: 1px solid #000 !important; }
+          .rfi-print-container .rounded-lg { border-radius: 0 !important; }
+          .rfi-print-container .bg-gray-50 { background-color: #f9f9f9 !important; }
+          
+          /* Hide interactive elements */
+          .print\\:hidden { display: none !important; }
+          
+          /* Text contrast for print */
+          .rfi-print-container .text-gray-600 { color: #374151 !important; }
+          .rfi-print-container .text-gray-700 { color: #374151 !important; }
+          .rfi-print-container .text-gray-900 { color: #000 !important; }
+          
+          /* Compact spacing for print */
+          .rfi-print-container .px-8 { padding-left: 12px !important; padding-right: 12px !important; }
+          .rfi-print-container .py-6 { padding-top: 8px !important; padding-bottom: 8px !important; }
+          .rfi-print-container .py-4 { padding-top: 6px !important; padding-bottom: 6px !important; }
+          .rfi-print-container .py-3 { padding-top: 4px !important; padding-bottom: 4px !important; }
+          .rfi-print-container .py-2 { padding-top: 3px !important; padding-bottom: 3px !important; }
+          .rfi-print-container .mb-4 { margin-bottom: 8px !important; }
+          .rfi-print-container .mb-6 { margin-bottom: 10px !important; }
+          .rfi-print-container .mt-1 { margin-top: 2px !important; }
+          
+          /* Compact fonts and spacing */
+          .rfi-print-container h1 { 
+            font-size: 18px !important; 
+            line-height: 1.2 !important;
+            margin: 0 !important;
+          }
+          .rfi-print-container h2 { 
+            font-size: 14px !important; 
+            line-height: 1.2 !important;
+            margin-bottom: 6px !important;
+            padding-bottom: 2px !important;
+          }
+          .rfi-print-container h3 { 
+            font-size: 12px !important; 
+            line-height: 1.2 !important;
+            margin-bottom: 4px !important;
+          }
+          .rfi-print-container .text-lg { font-size: 13px !important; }
+          .rfi-print-container .text-sm { font-size: 10px !important; }
+          .rfi-print-container .text-xs { font-size: 9px !important; }
+          
+          /* Grid adjustments */
+          .rfi-print-container .grid {
+            gap: 8px !important;
+          }
+          .rfi-print-container .gap-4 { gap: 6px !important; }
+          .rfi-print-container .gap-x-6 { column-gap: 8px !important; }
+          
+          /* Table optimizations */
+          .rfi-print-container table {
+            font-size: 10px !important;
+            line-height: 1.2 !important;
+          }
+          .rfi-print-container .px-4.py-2 { 
+            padding: 3px 6px !important; 
+          }
+          .rfi-print-container .px-3.py-2 { 
+            padding: 2px 4px !important; 
+          }
+          
+          /* Attachment table specific */
+          .attachment-table { 
+            page-break-inside: avoid !important;
+            margin-top: 8px !important;
+          }
+          
+          /* Background areas more compact */
+          .rfi-print-container .bg-gray-50.p-4 {
+            padding: 6px !important;
+          }
+          
+          /* Make the RFI content fill efficiently */
+          .rfi-print-container .max-w-4xl { 
+            max-width: none !important; 
+            width: 100% !important;
+          }
+          .rfi-print-container .mx-auto { margin: 0 !important; }
+          .rfi-print-container .px-4 { padding: 0 !important; }
+          .rfi-print-container .py-8 { padding: 0 !important; }
+          .rfi-print-container .min-h-screen { 
+            min-height: auto !important; 
+          }
+          
+          /* Main container optimized for single page */
+          .rfi-print-container .bg-white.border {
+            width: 100% !important;
+            height: auto !important;
+            max-height: none !important;
+            border: 2px solid #000 !important;
+            margin: 0 !important;
+            box-sizing: border-box !important;
+            page-break-inside: avoid !important;
+            page-break-after: avoid !important;
+            page-break-before: avoid !important;
+          }
+          
+          /* Prevent page breaks */
+          .rfi-print-container * {
+            page-break-after: avoid !important;
+            page-break-before: avoid !important;
+            page-break-inside: avoid !important;
+          }
+        }
+      `}</style>
+    
+    <div className="min-h-screen bg-gray-100 py-8 print:py-0">
+      <div className="max-w-4xl mx-auto px-4 print:px-0 print:max-w-none rfi-print-container">
         {/* Main Container - Printable Page */}
         <div className="bg-white border border-gray-300 shadow-lg rounded-lg overflow-hidden">
           
@@ -295,29 +610,91 @@ export function RfiDetailView({ rfi }: RfiDetailViewProps) {
             </div>
 
             {/* Associated Reference Documents */}
-            <div>
+            <div className="attachment-table print:break-inside-avoid">
               <h3 className="font-semibold text-gray-700 mb-2">Associated Reference Documents:</h3>
-              <div className="border rounded">
+              <div className="border rounded print:rounded-none">
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="px-4 py-2 text-left font-semibold text-gray-700 border-b">Document Name</th>
                       <th className="px-4 py-2 text-left font-semibold text-gray-700 border-b">Type</th>
+                      <th className="px-4 py-2 text-left font-semibold text-gray-700 border-b">Size</th>
                       <th className="px-4 py-2 text-left font-semibold text-gray-700 border-b">Date Added</th>
+                      <th className="px-4 py-2 text-left font-semibold text-gray-700 border-b">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {rfi.attachments && rfi.attachments.length > 0 ? (
-                      rfi.attachments.map((attachment, index) => (
-                        <tr key={index} className="border-b">
-                          <td className="px-4 py-2 text-gray-900">{attachment}</td>
-                          <td className="px-4 py-2 text-gray-600">Document</td>
-                          <td className="px-4 py-2 text-gray-600">{format(new Date(rfi.created_at), 'MM/dd/yyyy')}</td>
+                    {rfi.attachment_files && rfi.attachment_files.length > 0 ? (
+                      rfi.attachment_files.map((attachment, index) => (
+                        <tr key={attachment.id || index} className="border-b">
+                          <td className="px-4 py-2 text-gray-900">
+                            <div className="flex items-center space-x-2">
+                              {attachment.file_type?.includes('pdf') ? (
+                                <svg className="w-4 h-4 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
+                                </svg>
+                              ) : attachment.file_type?.includes('image') ? (
+                                <svg className="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
+                                </svg>
+                              ) : attachment.file_type?.includes('word') || attachment.file_type?.includes('document') ? (
+                                <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
+                                </svg>
+                              ) : (
+                                <svg className="w-4 h-4 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
+                                </svg>
+                              )}
+                              <span>{attachment.file_name}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-2 text-gray-600">
+                            {attachment.file_type || 'Document'}
+                          </td>
+                          <td className="px-4 py-2 text-gray-600">
+                            {attachment.file_size_bytes ? formatFileSize(attachment.file_size_bytes) : 'Unknown'}
+                          </td>
+                          <td className="px-4 py-2 text-gray-600">
+                            {format(new Date(attachment.created_at || rfi.created_at), 'MM/dd/yyyy')}
+                          </td>
+                          <td className="px-4 py-2">
+                            <div className="flex items-center space-x-2">
+                              {attachment.public_url ? (
+                                <>
+                                  <button
+                                    onClick={() => openPreview(attachment)}
+                                    className="inline-flex items-center space-x-1 text-green-600 hover:text-green-800 text-sm font-medium hover:bg-green-50 px-2 py-1 rounded transition-colors print:hidden"
+                                  >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                    </svg>
+                                    <span>View</span>
+                                  </button>
+                                  <a
+                                    href={attachment.public_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center space-x-1 text-blue-600 hover:text-blue-800 text-sm font-medium hover:bg-blue-50 px-2 py-1 rounded transition-colors print:hidden"
+                                  >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                    <span>Download</span>
+                                  </a>
+                                  <span className="hidden print:inline text-sm text-gray-700">Attachment</span>
+                                </>
+                              ) : (
+                                <span className="text-gray-400 text-sm print:text-gray-700">No link</span>
+                              )}
+                            </div>
+                          </td>
                         </tr>
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={3} className="px-4 py-3 text-gray-500 text-center">No documents attached</td>
+                        <td colSpan={5} className="px-4 py-3 text-gray-500 text-center">No documents attached</td>
                       </tr>
                     )}
                   </tbody>
@@ -327,7 +704,7 @@ export function RfiDetailView({ rfi }: RfiDetailViewProps) {
           </div>
 
           {/* Client Response Section */}
-          <div className="px-8 py-6">
+          <div className="px-8 py-6 print:hidden">
             <h2 className="text-lg font-bold text-gray-900 mb-4 pb-2 border-b border-gray-300">
               Client's Response
             </h2>
@@ -415,16 +792,46 @@ export function RfiDetailView({ rfi }: RfiDetailViewProps) {
           </div>
         </div>
 
-        {/* Back Button */}
-        <div className="mt-6 text-center">
+        {/* Action Buttons */}
+        <div className="mt-6 flex justify-center space-x-4 print:hidden">
           <button
             onClick={() => window.history.back()}
             className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
           >
             ← Back to RFIs
           </button>
+          
+          <button
+            onClick={handlePrintRFI}
+            className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          >
+            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+            </svg>
+            Print RFI
+          </button>
+          
+          {rfi.attachment_files && rfi.attachment_files.length > 0 && (
+            <button
+              onClick={handlePrintWithAttachments}
+              className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+            >
+              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2-2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+              </svg>
+              Print Package ({rfi.attachment_files.length} files)
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Attachment Preview Modal */}
+      <AttachmentPreviewModal 
+        attachment={previewAttachment}
+        isOpen={isPreviewOpen}
+        onClose={closePreview}
+      />
     </div>
+    </>
   );
 } 

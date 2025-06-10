@@ -1,17 +1,22 @@
 "use client"
 
 import { useState } from 'react'
-import { useAuth } from '@/hooks/useAuth'
+import { useAuth } from '@/contexts/AuthContext'
 import { cn } from '@/lib/utils'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const { login, isLoading, error } = useAuth()
+  const [error, setError] = useState<string | null>(null)
+  const { signIn, loading } = useAuth()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    await login(email, password)
+    setError(null)
+    const { error: signInError } = await signIn(email, password)
+    if (signInError) {
+      setError(signInError.message)
+    }
   }
 
   return (
@@ -23,9 +28,6 @@ export default function LoginPage() {
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
             Professional RFI management for general contractors
-          </p>
-          <p className="mt-4 text-center text-xs text-blue-600">
-            Demo Mode: Enter any email and password to login
           </p>
         </div>
 
@@ -42,13 +44,13 @@ export default function LoginPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="test@example.com"
+                placeholder="Enter your email"
                 className={cn(
                   "mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm",
                   "focus:outline-none focus:ring-blue-500 focus:border-blue-500",
                   "disabled:opacity-50 disabled:cursor-not-allowed"
                 )}
-                disabled={isLoading}
+                disabled={loading}
               />
             </div>
 
@@ -63,13 +65,13 @@ export default function LoginPage() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Any password"
+                placeholder="Enter your password"
                 className={cn(
                   "mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm",
                   "focus:outline-none focus:ring-blue-500 focus:border-blue-500",
                   "disabled:opacity-50 disabled:cursor-not-allowed"
                 )}
-                disabled={isLoading}
+                disabled={loading}
               />
             </div>
           </div>
@@ -82,7 +84,7 @@ export default function LoginPage() {
 
           <button
             type="submit"
-            disabled={isLoading}
+            disabled={loading}
             className={cn(
               "w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm",
               "text-sm font-medium text-white bg-blue-600 hover:bg-blue-700",
@@ -91,7 +93,7 @@ export default function LoginPage() {
               "transition-colors duration-200"
             )}
           >
-            {isLoading ? 'Signing in...' : 'Sign in'}
+            {loading ? 'Signing in...' : 'Sign in'}
           </button>
         </form>
       </div>

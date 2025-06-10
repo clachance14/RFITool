@@ -175,6 +175,7 @@ function RfiTable({ rfis, emptyMessage }: { rfis: any[]; emptyMessage: string })
             <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Status</th>
             <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Created</th>
             <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Due</th>
+            <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Attachments</th>
             <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Response</th>
           </tr>
         </thead>
@@ -186,6 +187,13 @@ function RfiTable({ rfis, emptyMessage }: { rfis: any[]; emptyMessage: string })
               <td className="px-3 py-2 text-sm capitalize">{rfi.status}</td>
               <td className="px-3 py-2 text-sm">{rfi.created_at ? format(new Date(rfi.created_at), 'MMM d, yyyy') : '-'}</td>
               <td className="px-3 py-2 text-sm">{rfi.due_date ? format(new Date(rfi.due_date), 'MMM d, yyyy') : '-'}</td>
+              <td className="px-3 py-2 text-sm">
+                {rfi.attachment_files && rfi.attachment_files.length > 0 ? (
+                  <span className="text-blue-600 font-medium">{rfi.attachment_files.length}</span>
+                ) : (
+                  <span className="text-gray-400">0</span>
+                )}
+              </td>
               <td className="px-3 py-2 text-sm">{rfi.response ? 'Yes' : 'No'}</td>
             </tr>
           ))}

@@ -1,27 +1,31 @@
 "use client";
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Upload, X, Eye, Settings, Users, Mail, Cog, FileText, Shield, Plus, Edit, Trash2 } from 'lucide-react';
 import { AdminProjectSection } from '@/components/project/AdminProjectSection';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
 
-// Mock user data - in real app this would come from a database
-const mockUsers = [
-  { id: '1', name: 'John Doe', email: 'john@example.com', role: 'owner', status: 'active', lastLogin: '2024-01-15' },
-  { id: '2', name: 'Jane Smith', email: 'jane@example.com', role: 'admin', status: 'active', lastLogin: '2024-01-14' },
-  { id: '3', name: 'Mike Johnson', email: 'mike@example.com', role: 'rfi_user', status: 'active', lastLogin: '2024-01-13' },
-  { id: '4', name: 'Sarah Wilson', email: 'sarah@example.com', role: 'view_only', status: 'inactive', lastLogin: '2024-01-10' },
-];
+// User role mapping from role_id to role string
+const ROLE_MAPPING = {
+  1: 'owner',    // Company owner/creator
+  2: 'admin',    // Admin
+  3: 'rfi_user', // Regular RFI user
+  4: 'view_only', // View only user
+  5: 'client_collaborator' // Client user
+} as const;
 
 const userRoles = {
   'owner': { label: 'Owner', color: 'bg-purple-100 text-purple-800', description: 'Full system access including user management' },
   'admin': { label: 'Admin', color: 'bg-blue-100 text-blue-800', description: 'Manage RFIs, projects, and most settings' },
-  'project_manager': { label: 'Project Manager', color: 'bg-green-100 text-green-800', description: 'Manage projects and respond to RFIs' },
   'rfi_user': { label: 'RFI User', color: 'bg-yellow-100 text-yellow-800', description: 'Create and edit RFIs' },
   'view_only': { label: 'View Only', color: 'bg-gray-100 text-gray-800', description: 'Read-only access to RFIs and projects' },
+  'client_collaborator': { label: 'Client', color: 'bg-orange-100 text-orange-800', description: 'View RFIs and project data, respond to RFIs' },
 };
 
 export default function AdminPage() {
+  const { session } = useAuth();
   const [activeTab, setActiveTab] = useState('branding');
   
   // Current saved values
@@ -45,7 +49,8 @@ export default function AdminPage() {
   const [clientName, setClientName] = useState<string>(savedClientName);
 
   // User management state
-  const [users, setUsers] = useState(mockUsers);
+  const [users, setUsers] = useState<any[]>([]);
+  const [usersLoading, setUsersLoading] = useState(true);
   const [showAddUser, setShowAddUser] = useState(false);
   const [editingUser, setEditingUser] = useState<string | null>(null);
   const [newUser, setNewUser] = useState({
@@ -53,6 +58,67 @@ export default function AdminPage() {
     email: '',
     role: 'rfi_user'
   });
+
+  // Fetch users from database
+  useEffect(() => {
+    const fetchUsers = async () => {
+      if (!session?.user?.id) return;
+
+      try {
+        setUsersLoading(true);
+        
+        // Get current user's company
+        const { data: currentUserCompany, error: companyError } = await supabase
+          .from('company_users')
+          .select('company_id')
+          .eq('user_id', session.user.id)
+          .single();
+
+        if (companyError || !currentUserCompany) {
+          console.error('Error fetching user company:', companyError);
+          return;
+        }
+
+        // Fetch all users from the same company with their roles
+        const { data: companyUsers, error: usersError } = await supabase
+          .from('company_users')
+          .select(`
+            user_id,
+            role_id,
+            created_at,
+            users!inner (
+              id,
+              email,
+              full_name
+            )
+          `)
+          .eq('company_id', currentUserCompany.company_id);
+
+        if (usersError) {
+          console.error('Error fetching users:', usersError);
+          return;
+        }
+
+        // Transform the data to match our expected format
+        const transformedUsers = companyUsers?.map((cu: any) => ({
+          id: cu.user_id,
+          name: cu.users.full_name || cu.users.email,
+          email: cu.users.email,
+          role: ROLE_MAPPING[cu.role_id as keyof typeof ROLE_MAPPING] || 'rfi_user',
+          status: 'active', // For now, all users are active
+          lastLogin: new Date(cu.created_at).toLocaleDateString() || 'Never'
+        })) || [];
+
+        setUsers(transformedUsers);
+      } catch (error) {
+        console.error('Error fetching users:', error);
+      } finally {
+        setUsersLoading(false);
+      }
+    };
+
+    fetchUsers();
+  }, [session?.user?.id]);
 
   // System settings state
   const [rfiNumberFormat, setRfiNumberFormat] = useState(localStorage.getItem('rfi_number_format') || 'RFI-{YYYY}-{####}');
@@ -141,45 +207,162 @@ export default function AdminPage() {
     alert('System settings saved successfully!');
   };
 
-  const handleDeleteUser = (userId: string) => {
-    if (confirm('Are you sure you want to delete this user?')) {
-      setUsers(users.filter(u => u.id !== userId));
+  const handleDeleteUser = async (userId: string) => {
+    if (!confirm('Are you sure you want to remove this user from your company?')) {
+      return;
+    }
+
+    try {
+      // Remove user from company_users table (this doesn't delete the user, just removes them from the company)
+      const { error } = await supabase
+        .from('company_users')
+        .delete()
+        .eq('user_id', userId);
+
+      if (error) {
+        console.error('Error removing user from company:', error);
+        alert('Failed to remove user from company');
+        return;
+      }
+
+      // Update local state
+      setUsers(users.filter((u: any) => u.id !== userId));
+    } catch (error) {
+      console.error('Error removing user from company:', error);
+      alert('Failed to remove user from company');
     }
   };
 
-  const handleChangeUserRole = (userId: string, newRole: string) => {
-    setUsers(users.map(u => u.id === userId ? { ...u, role: newRole } : u));
+  const handleChangeUserRole = async (userId: string, newRole: string) => {
+    try {
+      // Find the role_id for the new role
+      const roleId = Object.entries(ROLE_MAPPING).find(([id, role]) => role === newRole)?.[0];
+      
+      if (!roleId) {
+        alert('Invalid role selected');
+        return;
+      }
+
+      // Update the role in the database
+      const { error } = await supabase
+        .from('company_users')
+        .update({ role_id: parseInt(roleId) })
+        .eq('user_id', userId);
+
+      if (error) {
+        console.error('Error updating user role:', error);
+        alert('Failed to update user role');
+        return;
+      }
+
+      // Update local state
+      setUsers(users.map((u: any) => u.id === userId ? { ...u, role: newRole } : u));
+    } catch (error) {
+      console.error('Error updating user role:', error);
+      alert('Failed to update user role');
+    }
   };
 
-  const handleAddUser = () => {
+  const handleAddUser = async () => {
     if (!newUser.name.trim() || !newUser.email.trim()) {
       alert('Please fill in all required fields');
       return;
     }
 
-    // Check if email already exists
-    if (users.some(u => u.email.toLowerCase() === newUser.email.toLowerCase())) {
-      alert('A user with this email already exists');
+    // Check if email already exists in current company
+    if (users.some((u: any) => u.email.toLowerCase() === newUser.email.toLowerCase())) {
+      alert('A user with this email already exists in your company');
       return;
     }
 
-    // Add new user
-    const user = {
-      id: Date.now().toString(), // Simple ID generation
-      name: newUser.name.trim(),
-      email: newUser.email.trim().toLowerCase(),
-      role: newUser.role,
-      status: 'active' as const,
-      lastLogin: 'Never'
-    };
+    try {
+      // Get current user's company
+      const { data: currentUserCompany, error: companyError } = await supabase
+        .from('company_users')
+        .select('company_id')
+        .eq('user_id', session?.user?.id)
+        .single();
 
-    setUsers([...users, user]);
-    
-    // Reset form and close modal
-    setNewUser({ name: '', email: '', role: 'rfi_user' });
-    setShowAddUser(false);
-    
-    alert(`User ${user.name} added successfully!`);
+      if (companyError || !currentUserCompany) {
+        alert('Unable to determine your company. Please try again.');
+        return;
+      }
+
+      // Check if user already exists in users table
+      let userId;
+      const { data: existingUser, error: userCheckError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('email', newUser.email.trim().toLowerCase())
+        .single();
+
+      if (existingUser) {
+        // User exists, just add them to the company
+        userId = existingUser.id;
+      } else {
+        // Create new user
+        const { data: newUserData, error: createUserError } = await supabase
+          .from('users')
+          .insert({
+            email: newUser.email.trim().toLowerCase(),
+            full_name: newUser.name.trim()
+          })
+          .select()
+          .single();
+
+        if (createUserError || !newUserData) {
+          console.error('Error creating user:', createUserError);
+          alert('Failed to create user');
+          return;
+        }
+
+        userId = newUserData.id;
+      }
+
+      // Find the role_id for the selected role
+      const roleId = Object.entries(ROLE_MAPPING).find(([id, role]) => role === newUser.role)?.[0];
+      
+      if (!roleId) {
+        alert('Invalid role selected');
+        return;
+      }
+
+      // Add user to company
+      const { error: companyUserError } = await supabase
+        .from('company_users')
+        .insert({
+          user_id: userId,
+          company_id: currentUserCompany.company_id,
+          role_id: parseInt(roleId)
+        });
+
+      if (companyUserError) {
+        console.error('Error adding user to company:', companyUserError);
+        alert('Failed to add user to company');
+        return;
+      }
+
+      // Add to local state
+      const user = {
+        id: userId,
+        name: newUser.name.trim(),
+        email: newUser.email.trim().toLowerCase(),
+        role: newUser.role,
+        status: 'active' as const,
+        lastLogin: 'Never'
+      };
+
+      setUsers([...users, user]);
+      
+      // Reset form and close modal
+      setNewUser({ name: '', email: '', role: 'rfi_user' });
+      setShowAddUser(false);
+      
+      alert(`User ${user.name} added successfully!`);
+    } catch (error) {
+      console.error('Error adding user:', error);
+      alert('Failed to add user');
+    }
   };
 
   const handleCancelAddUser = () => {
@@ -479,18 +662,24 @@ export default function AdminPage() {
 
               {/* Users Table */}
               <div className="overflow-x-auto">
-                <table className="min-w-full border border-gray-200 rounded-lg">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">User</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Last Login</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {users.map((user) => (
+                {usersLoading ? (
+                  <div className="flex justify-center items-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    <span className="ml-2 text-gray-600">Loading users...</span>
+                  </div>
+                ) : (
+                  <table className="min-w-full border border-gray-200 rounded-lg">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">User</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Last Login</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {users.map((user: any) => (
                       <tr key={user.id} className="hover:bg-gray-50">
                         <td className="px-4 py-3">
                           <div>
@@ -537,10 +726,11 @@ export default function AdminPage() {
                           </div>
                         </td>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                                            ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
             </div>
           )}
 

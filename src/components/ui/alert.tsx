@@ -36,6 +36,7 @@ const Alert = React.forwardRef<
     success: CheckCircle,
     warning: AlertCircle,
     info: Info,
+    error: XCircle,
   }[variant || 'default']
 
   return (

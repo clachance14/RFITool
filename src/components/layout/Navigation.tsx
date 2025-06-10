@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { LayoutDashboard, FilePlus, LogOut, FileText, Settings, FolderOpen } from 'lucide-react';
+import { LayoutDashboard, FilePlus, LogOut, FileText, Settings, FolderOpen, TestTube } from 'lucide-react';
 
 export default function Navigation() {
   const pathname = usePathname();
@@ -106,6 +106,21 @@ export default function Navigation() {
               Admin
             </Link>
           </li>
+          <li>
+            <Link
+              href="/test-upload"
+              className={`flex items-center px-4 py-3 rounded-lg text-lg font-medium transition-colors ${
+                pathname === '/test-upload'
+                  ? 'bg-gray-100 text-blue-600 border-l-4 border-blue-600'
+                  : 'text-gray-700 hover:bg-gray-50'
+              }`}
+              data-testid="nav-tests"
+              aria-current={pathname === '/test-upload' ? 'page' : undefined}
+            >
+              <TestTube className="mr-3 h-6 w-6" />
+              Tests
+            </Link>
+          </li>
 
         </ul>
         <button
@@ -174,6 +189,17 @@ export default function Navigation() {
         >
           <Settings className="h-6 w-6 mb-1" />
           <span className="text-xs font-medium">Admin</span>
+        </Link>
+        <Link
+          href="/test-upload"
+          className={`flex flex-col items-center justify-center px-2 py-1 rounded transition-colors ${
+            pathname === '/test-upload' ? 'text-blue-600' : 'text-gray-500 hover:text-blue-600'
+          }`}
+          data-testid="mobile-nav-tests"
+          aria-current={pathname === '/test-upload' ? 'page' : undefined}
+        >
+          <TestTube className="h-6 w-6 mb-1" />
+          <span className="text-xs font-medium">Tests</span>
         </Link>
 
       </nav>

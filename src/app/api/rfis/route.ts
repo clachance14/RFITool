@@ -2,28 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import * as z from 'zod';
 import { RFI, CreateRFIInput, ApiResponse } from '@/lib/types';
 import { createRFISchema } from '@/lib/validations';
-
-// Mock data for development
-const mockRFIs: RFI[] = [
-  {
-    id: '1',
-    rfi_number: 'RFI-001',
-    project_id: '1',
-    subject: 'Foundation Design Clarification',
-    description: 'Need clarification on foundation design specifications',
-    status: 'draft',
-    priority: 'high',
-    assigned_to: null,
-    due_date: null,
-    created_by: 'user1',
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-    response: null,
-    response_date: null,
-    attachments: [],
-  },
-  // Add more mock RFIs as needed
-];
+import { supabase } from '@/lib/supabase';
 
 // Query parameter validation schema
 const querySchema = z.object({
@@ -34,14 +13,33 @@ const querySchema = z.object({
 });
 
 // Helper function to generate RFI number
-function generateRFINumber(rfis: RFI[]): string {
-  const lastRFI = [...rfis].sort((a, b) => 
-    parseInt(b.rfi_number.split('-')[1]) - parseInt(a.rfi_number.split('-')[1])
-  )[0];
-  
-  const lastNumber = lastRFI ? parseInt(lastRFI.rfi_number.split('-')[1]) : 0;
-  const nextNumber = lastNumber + 1;
-  return `RFI-${nextNumber.toString().padStart(3, '0')}`;
+async function generateRFINumber(projectId?: string): Promise<string> {
+  try {
+    let query = supabase
+      .from('rfis')
+      .select('rfi_number')
+      .order('created_at', { ascending: false });
+    
+    // If projectId is provided, filter by project
+    if (projectId) {
+      query = query.eq('project_id', projectId);
+    }
+    
+    const { data, error } = await query.limit(1);
+
+    if (error) {
+      throw new Error('Failed to generate RFI number: ' + error.message);
+    }
+
+    const lastRFI = data?.[0];
+    const lastNumber = lastRFI ? parseInt(lastRFI.rfi_number.split('-')[1]) : 0;
+    const nextNumber = lastNumber + 1;
+    return `RFI-${nextNumber.toString().padStart(3, '0')}`;
+  } catch (err) {
+    // Fallback to timestamp-based numbering if query fails
+    const timestamp = Date.now().toString().slice(-6);
+    return `RFI-${timestamp}`;
+  }
 }
 
 // Helper function to create error response
@@ -71,31 +69,37 @@ export async function GET(request: NextRequest) {
 
     const { projectId, status, page = 1, limit = 10 } = validatedParams.data;
 
-    // Filter RFIs based on query parameters
-    let filteredRFIs = [...mockRFIs];
-    
+    // Build query
+    let query = supabase.from('rfis').select('*');
+
+    // Apply filters
     if (projectId) {
-      filteredRFIs = filteredRFIs.filter(rfi => rfi.project_id === projectId);
+      query = query.eq('project_id', projectId);
     }
-    
     if (status) {
-      filteredRFIs = filteredRFIs.filter(rfi => rfi.status === status);
+      query = query.eq('status', status);
     }
 
-    // Calculate pagination
-    const total = filteredRFIs.length;
-    const startIndex = (page - 1) * limit;
-    const endIndex = startIndex + limit;
-    const paginatedRFIs = filteredRFIs.slice(startIndex, endIndex);
+    // Apply pagination
+    const offset = (page - 1) * limit;
+    query = query.range(offset, offset + limit - 1);
+
+    // Execute query
+    const { data, error, count } = await query.order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Database error:', error);
+      return errorResponse('Failed to fetch RFIs', 500);
+    }
 
     // Return paginated response
     return NextResponse.json({
       success: true,
       data: {
-        rfis: paginatedRFIs,
-        total,
+        rfis: data || [],
+        total: count || 0,
         page,
-        totalPages: Math.ceil(total / limit),
+        totalPages: Math.ceil((count || 0) / limit),
       },
     });
   } catch (error) {
@@ -113,38 +117,56 @@ export async function POST(request: NextRequest) {
     // Validate request body
     const validatedData = createRFISchema.safeParse(body);
     if (!validatedData.success) {
-      return errorResponse('Invalid RFI data');
+      return errorResponse('Invalid RFI data: ' + validatedData.error.message);
+    }
+
+    // Get current user
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      return errorResponse('User not authenticated', 401);
     }
 
     // Generate RFI number
-    const rfiNumber = generateRFINumber(mockRFIs);
+    const rfiNumber = await generateRFINumber(validatedData.data.project_id);
 
-    // Create new RFI
-    const newRFI: RFI = {
-      id: Math.random().toString(36).substr(2, 9), // Mock ID generation
+    // Create new RFI data
+    const newRFIData = {
       rfi_number: rfiNumber,
       project_id: validatedData.data.project_id,
       subject: validatedData.data.subject,
-      description: validatedData.data.reason_for_rfi,
-      status: 'draft',
-      priority: validatedData.data.urgency === 'urgent' ? 'high' : 'medium',
-      assigned_to: validatedData.data.assigned_to || null,
-      due_date: validatedData.data.due_date || null,
-      created_by: 'user1', // Mock user ID
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      response: null,
-      response_date: null,
-      attachments: [],
+      reason_for_rfi: validatedData.data.reason_for_rfi,
+      contractor_question: validatedData.data.contractor_question,
+      contractor_proposed_solution: validatedData.data.contractor_proposed_solution || null,
+      discipline: validatedData.data.discipline || null,
+      system: validatedData.data.system || null,
+      work_impact: validatedData.data.work_impact || null,
+      cost_impact: validatedData.data.cost_impact || null,
+      schedule_impact: validatedData.data.schedule_impact || null,
+      test_package: validatedData.data.test_package || null,
+      schedule_id: validatedData.data.schedule_id || null,
+      block_area: validatedData.data.block_area || null,
+      status: validatedData.data.status,
+      urgency: validatedData.data.urgency,
+      to_recipient: validatedData.data.to_recipient || '',
+      created_by: user.id,
     };
 
-    // In a real implementation, we would save to the database here
-    mockRFIs.push(newRFI);
+    // Insert RFI into database
+    const { data: rfiData, error: rfiError } = await supabase
+      .from('rfis')
+      .insert(newRFIData)
+      .select()
+      .single();
+
+    if (rfiError) {
+      console.error('Database insert error:', rfiError);
+      return errorResponse('Failed to create RFI: ' + rfiError.message, 500);
+    }
 
     // Return created RFI
     return NextResponse.json({
       success: true,
-      data: newRFI,
+      data: rfiData,
     }, { status: 201 });
   } catch (error) {
     console.error('Error creating RFI:', error);
