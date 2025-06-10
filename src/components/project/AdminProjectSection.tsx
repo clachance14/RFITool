@@ -1,31 +1,26 @@
 "use client";
 
 import { useState } from 'react';
-import { ProjectForm } from './ProjectForm';
+import { ProjectFormWithLogos } from './ProjectFormWithLogos';
+import { useProjects } from '@/hooks/useProjects';
 import { Button } from '@/components/ui/button';
 import { Plus, FileText, Settings } from 'lucide-react';
-import { ProjectFormData } from '@/lib/types';
+import { CreateProjectInput } from '@/lib/types';
 
 export function AdminProjectSection() {
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const { createProject } = useProjects();
 
-  const handleCreateProject = async (data: ProjectFormData) => {
-    try {
-      // Here you would typically call your API to create the project
-      // For now, we'll just simulate the API call
-      console.log('Creating project:', data);
-      
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // After successful creation, hide the form
-      setShowCreateForm(false);
-      
-      // You could also trigger a refresh of projects list here
-      alert('Project created successfully!');
-    } catch (error) {
-      throw new Error('Failed to create project');
+  const handleCreateProject = async (data: CreateProjectInput): Promise<void> => {
+    const result = await createProject(data);
+    if (result.error) {
+      throw new Error(result.error);
     }
+    
+    // After successful creation, hide the form
+    setShowCreateForm(false);
+    
+    alert('Project created successfully!');
   };
 
   if (showCreateForm) {
@@ -42,7 +37,7 @@ export function AdminProjectSection() {
         </div>
         
         <div className="bg-white border border-gray-200 rounded-lg">
-          <ProjectForm
+          <ProjectFormWithLogos
             onSubmit={handleCreateProject}
             submitLabel="Create Project"
           />

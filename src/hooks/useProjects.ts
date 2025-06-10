@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from 'react';
-import { Project, ProjectFormData } from '@/lib/types';
+import { Project } from '@/lib/types';
 import { CreateProjectInput } from '@/lib/validations';
 import { supabase, handleSupabaseError } from '@/lib/supabase';
 
@@ -68,6 +68,7 @@ export function useProjects() {
   }, []);
 
   const createProject = useCallback(async (projectData: CreateProjectInput): Promise<ApiResponse<Project>> => {
+    console.log('📝 createProject called with:', projectData);
     setLoading(true);
     setError(null);
     try {
@@ -83,7 +84,7 @@ export function useProjects() {
         .from('company_users')
         .select('company_id')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
       
       if (companyUserError || !companyUserData) {
         throw new Error('Unable to find user company association');
@@ -91,21 +92,25 @@ export function useProjects() {
       
       const newProjectData = {
         project_name: projectData.project_name,
+        contractor_job_number: projectData.contractor_job_number,
         job_contract_number: projectData.job_contract_number,
         client_company_name: projectData.client_company_name,
         company_id: companyUserData.company_id, // Use the retrieved company_id
+        created_by: user.id, // Track who created the project
         project_manager_contact: projectData.project_manager_contact || '',
         location: projectData.location,
         project_type: projectData.project_type,
         contract_value: projectData.contract_value,
-        start_date: projectData.start_date,
-        expected_completion: projectData.expected_completion,
+        start_date: projectData.start_date || null,
+        expected_completion: projectData.expected_completion || null,
         project_description: projectData.project_description,
         client_logo_url: projectData.client_logo_url,
         standard_recipients: projectData.standard_recipients || [],
         project_disciplines: projectData.project_disciplines || [],
         default_urgency: projectData.default_urgency || 'non-urgent',
       };
+      
+      console.log('💾 Data being sent to database:', newProjectData);
       
       const { data, error } = await supabase
         .from('projects')
@@ -114,6 +119,10 @@ export function useProjects() {
         .single();
       
       if (error) {
+        console.error('❌ Supabase error details:', error);
+        console.error('📋 Error code:', error.code);
+        console.error('📝 Error message:', error.message);
+        console.error('💡 Error hint:', error.hint);
         throw error;
       }
       
@@ -129,14 +138,37 @@ export function useProjects() {
     }
   }, []);
 
-  const updateProject = useCallback(async (id: string, projectData: Partial<ProjectFormData>): Promise<ApiResponse<Project>> => {
+  const updateProject = useCallback(async (id: string, projectData: Partial<CreateProjectInput>): Promise<ApiResponse<Project>> => {
     setLoading(true);
     setError(null);
     try {
+      // Clean the data to remove any undefined or empty fields that cause issues
+      const cleanedData: any = { ...projectData };
+      
+      // Remove company_id if it's empty (let it use the existing value)
+      if (cleanedData.company_id === '' || cleanedData.company_id === undefined) {
+        delete cleanedData.company_id;
+      }
+      
+      // Convert empty date strings to null for optional date fields
+      if (cleanedData.start_date === '') {
+        cleanedData.start_date = null;
+      }
+      if (cleanedData.expected_completion === '') {
+        cleanedData.expected_completion = null;
+      }
+      
+      // Convert empty contract_value to null or undefined
+      if (cleanedData.contract_value === '' || cleanedData.contract_value === 0) {
+        cleanedData.contract_value = null;
+      }
+      
+      console.log('💾 Update data being sent to database:', cleanedData);
+      
       const { data, error } = await supabase
         .from('projects')
         .update({
-          ...projectData,
+          ...cleanedData,
           updated_at: new Date().toISOString(),
         })
         .eq('id', id)

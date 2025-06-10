@@ -27,6 +27,7 @@ export function ProjectFormWithLogos({
   const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState<CreateProjectInput>({
     project_name: initialData?.project_name || '',
+    contractor_job_number: initialData?.contractor_job_number || '',
     job_contract_number: initialData?.job_contract_number || '',
     client_company_name: initialData?.client_company_name || '',
     company_id: initialData?.company_id || '',
@@ -56,6 +57,7 @@ export function ProjectFormWithLogos({
         standard_recipients: formData.standard_recipients.filter(email => email.trim() !== ''),
       };
 
+      console.log('🔍 Form data being submitted:', cleanedData);
       await onSubmit(cleanedData);
       // Navigation handled by parent component
     } catch (err) {
@@ -111,13 +113,24 @@ export function ProjectFormWithLogos({
           </div>
 
           <div>
-            <Label htmlFor="job_contract_number">Job Contract Number *</Label>
+            <Label htmlFor="contractor_job_number">Contractor Job Number *</Label>
+            <Input
+              id="contractor_job_number"
+              value={formData.contractor_job_number}
+              onChange={(e) => handleChange('contractor_job_number', e.target.value)}
+              required
+              placeholder="Internal job number"
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="job_contract_number">Client Contract Number *</Label>
             <Input
               id="job_contract_number"
               value={formData.job_contract_number}
               onChange={(e) => handleChange('job_contract_number', e.target.value)}
               required
-              placeholder="Enter contract number"
+              placeholder="Client's contract number"
             />
           </div>
 
@@ -173,22 +186,24 @@ export function ProjectFormWithLogos({
           </div>
 
           <div>
-            <Label htmlFor="start_date">Start Date</Label>
+            <Label htmlFor="start_date">Start Date (Optional)</Label>
             <Input
               id="start_date"
               type="date"
               value={formData.start_date}
               onChange={(e) => handleChange('start_date', e.target.value)}
+              placeholder="Select start date (optional)"
             />
           </div>
 
           <div>
-            <Label htmlFor="expected_completion">Expected Completion</Label>
+            <Label htmlFor="expected_completion">Expected Completion (Optional)</Label>
             <Input
               id="expected_completion"
               type="date"
               value={formData.expected_completion}
               onChange={(e) => handleChange('expected_completion', e.target.value)}
+              placeholder="Select completion date (optional)"
             />
           </div>
 

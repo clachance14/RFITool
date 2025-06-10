@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { LayoutDashboard, FilePlus, LogOut, FileText, Settings } from 'lucide-react';
+import { LayoutDashboard, FilePlus, LogOut, FileText, Settings, FolderOpen } from 'lucide-react';
 
 export default function Navigation() {
   const pathname = usePathname();
@@ -44,6 +44,21 @@ export default function Navigation() {
             >
               <LayoutDashboard className="mr-3 h-6 w-6" />
               Dashboard
+            </Link>
+          </li>
+          <li>
+            <Link
+              href="/projects"
+              className={`flex items-center px-4 py-3 rounded-lg text-lg font-medium transition-colors ${
+                pathname === '/projects' || pathname.startsWith('/projects/')
+                  ? 'bg-gray-100 text-blue-600 border-l-4 border-blue-600'
+                  : 'text-gray-700 hover:bg-gray-50'
+              }`}
+              data-testid="nav-projects"
+              aria-current={pathname === '/projects' || pathname.startsWith('/projects/') ? 'page' : undefined}
+            >
+              <FolderOpen className="mr-3 h-6 w-6" />
+              Projects
             </Link>
           </li>
           <li>
@@ -115,6 +130,17 @@ export default function Navigation() {
         >
           <LayoutDashboard className="h-6 w-6 mb-1" />
           <span className="text-xs font-medium">Dashboard</span>
+        </Link>
+        <Link
+          href="/projects"
+          className={`flex flex-col items-center justify-center px-2 py-1 rounded transition-colors ${
+            pathname === '/projects' || pathname.startsWith('/projects/') ? 'text-blue-600' : 'text-gray-500 hover:text-blue-600'
+          }`}
+          data-testid="mobile-nav-projects"
+          aria-current={pathname === '/projects' || pathname.startsWith('/projects/') ? 'page' : undefined}
+        >
+          <FolderOpen className="h-6 w-6 mb-1" />
+          <span className="text-xs font-medium">Projects</span>
         </Link>
         <Link
           href="/rfi-log"

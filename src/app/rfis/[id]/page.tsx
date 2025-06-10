@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { useRFIs } from '@/contexts/RFIContext';
+import { useRFIs } from '@/hooks/useRFIs';
 import { RfiDetailView } from '@/components/rfi/RfiDetailView';
 import type { RFI } from '@/lib/types';
 

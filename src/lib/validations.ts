@@ -113,6 +113,7 @@ export function formatValidationErrors(error: z.ZodError): ValidationError[] {
 
 export const createProjectSchema = z.object({
   project_name: z.string().min(1, 'Project name is required').max(200),
+  contractor_job_number: z.string().min(1, 'Contractor job number is required').max(100),
   job_contract_number: z.string().min(1, 'Contract number is required').max(100),
   client_company_name: z.string().min(1, 'Client company is required').max(200),
   company_id: z.string().max(100).optional().or(z.literal('')).transform(val => val === '' ? undefined : val),

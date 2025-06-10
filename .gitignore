@@ -25,6 +25,29 @@
 .env.test.local
 .env.production.local
 
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# SWC cache
+.swc/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/

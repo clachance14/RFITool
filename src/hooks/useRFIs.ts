@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useCallback, useMemo } from 'react';
-import { RFI, CreateRFIInput, UpdateRFIInput, RFIStatus } from '@/lib/types';
+import { RFI, CreateRFIInput, UpdateRFIInput, RFIStatus, RFICostItem, RFICostType } from '@/lib/types';
 import { createRFISchema, updateRFISchema } from '@/lib/validations';
-import { supabase } from '@/lib/supabase';
+import { supabase, handleSupabaseError } from '@/lib/supabase';
 
 // Types for the hook
 type RFIResponse = {
@@ -18,6 +18,134 @@ export function useRFIs() {
   const [error, setError] = useState<string | null>(null);
   const [currentRFI, setCurrentRFI] = useState<RFI | null>(null);
 
+  // Helper function to calculate total cost from cost items
+  const calculateTotalCostFromItems = (costItems: RFICostItem[]): number => {
+    return costItems.reduce((total, item) => total + (item.quantity * item.unit_cost), 0);
+  };
+
+  // Helper function to create cost items from legacy cost fields
+  const createCostItemsFromLegacyFields = async (rfiId: string, data: CreateRFIInput) => {
+    console.log('💰 Creating cost items for RFI:', rfiId, 'with data:', {
+      manhours: data.manhours,
+      labor_costs: data.labor_costs,
+      material_costs: data.material_costs,
+      equipment_costs: data.equipment_costs,
+      subcontractor_costs: data.subcontractor_costs
+    });
+    
+    // Debug: Log detailed information about each field
+    console.log('🔍 Field analysis:');
+    console.log('  manhours:', typeof data.manhours, data.manhours, 'isNaN:', isNaN(data.manhours as any));
+    console.log('  labor_costs:', typeof data.labor_costs, data.labor_costs, 'isNaN:', isNaN(data.labor_costs as any));
+    console.log('  material_costs:', typeof data.material_costs, data.material_costs, 'isNaN:', isNaN(data.material_costs as any));
+    console.log('  equipment_costs:', typeof data.equipment_costs, data.equipment_costs, 'isNaN:', isNaN(data.equipment_costs as any));
+    console.log('  subcontractor_costs:', typeof data.subcontractor_costs, data.subcontractor_costs, 'isNaN:', isNaN(data.subcontractor_costs as any));
+
+    const costItems: Array<{ rfi_id: string; description: string; cost_type: RFICostType; quantity: number; unit: string; unit_cost: number }> = [];
+
+    // Helper function to check if a value is a valid positive number
+    const isValidPositiveNumber = (value: any): value is number => {
+      return typeof value === 'number' && !isNaN(value) && value > 0;
+    };
+
+    if (isValidPositiveNumber(data.labor_costs)) {
+      console.log('➕ Adding labor cost item');
+      costItems.push({
+        rfi_id: rfiId,
+        description: isValidPositiveNumber(data.manhours) ? `Labor - ${data.manhours} hours` : 'Labor costs',
+        cost_type: 'labor',
+        quantity: isValidPositiveNumber(data.manhours) ? data.manhours : 1,
+        unit: isValidPositiveNumber(data.manhours) ? 'hours' : 'lump sum',
+        unit_cost: isValidPositiveNumber(data.manhours) ? data.labor_costs / data.manhours : data.labor_costs
+      });
+    }
+
+    if (isValidPositiveNumber(data.material_costs)) {
+      console.log('➕ Adding material cost item');
+      costItems.push({
+        rfi_id: rfiId,
+        description: 'Material costs',
+        cost_type: 'material',
+        quantity: 1,
+        unit: 'lump sum',
+        unit_cost: data.material_costs
+      });
+    }
+
+    if (isValidPositiveNumber(data.equipment_costs)) {
+      console.log('➕ Adding equipment cost item');
+      costItems.push({
+        rfi_id: rfiId,
+        description: 'Equipment costs',
+        cost_type: 'equipment',
+        quantity: 1,
+        unit: 'lump sum',
+        unit_cost: data.equipment_costs
+      });
+    }
+
+    if (isValidPositiveNumber(data.subcontractor_costs)) {
+      console.log('➕ Adding subcontractor cost item');
+      costItems.push({
+        rfi_id: rfiId,
+        description: 'Subcontractor costs',
+        cost_type: 'subcontractor',
+        quantity: 1,
+        unit: 'lump sum',
+        unit_cost: data.subcontractor_costs
+      });
+    }
+
+    console.log('💰 Cost items to insert:', costItems);
+
+    // Insert cost items into database
+    if (costItems.length > 0) {
+      try {
+        const { data: insertedItems, error } = await supabase
+          .from('rfi_cost_items')
+          .insert(costItems)
+          .select();
+        
+        if (error) {
+          console.error('❌ Error creating cost items:', error);
+          console.error('📋 Error code:', error.code);
+          console.error('📝 Error message:', error.message);
+          console.error('💡 Error hint:', error.hint);
+          console.error('🔍 Data that failed:', costItems);
+          throw error;
+        }
+        
+        console.log('✅ Cost items created successfully:', insertedItems);
+      } catch (err) {
+        console.error('❌ Cost item creation failed:', err);
+        // Don't throw here - let RFI creation succeed even if cost items fail
+        // This allows for fallback to legacy cost fields
+      }
+    } else {
+      console.log('💰 No cost items to create');
+    }
+  };
+
+  // Helper function to fetch cost items for an RFI
+  const fetchCostItems = async (rfiId: string): Promise<RFICostItem[]> => {
+    try {
+      const { data, error } = await supabase
+        .from('rfi_cost_items')
+        .select('*')
+        .eq('rfi_id', rfiId)
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        throw error;
+      }
+
+      return data || [];
+    } catch (err) {
+      console.error('Error fetching cost items:', err);
+      return [];
+    }
+  };
+
   // CRUD Operations
   const createRFI = useCallback(async (data: CreateRFIInput): Promise<RFI> => {
     setLoading(true);
@@ -26,42 +154,94 @@ export function useRFIs() {
       // Validate input data
       const validatedData = createRFISchema.parse(data);
       
-      // Generate RFI number
-      const rfiNumber = await getNextRFINumber();
+      // Get the currently authenticated user
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) {
+        throw new Error('User not authenticated');
+      }
       
-      // Create new RFI data
+      // Generate RFI number for the specific project
+      const rfiNumber = await getNextRFINumber(validatedData.project_id);
+      
+      // Create new RFI data - mapping only to fields that exist in database
       const newRFIData = {
         rfi_number: rfiNumber,
         project_id: validatedData.project_id,
         subject: validatedData.subject,
-        description: validatedData.reason_for_rfi,
+        reason_for_rfi: validatedData.reason_for_rfi,
+        contractor_question: validatedData.contractor_question,
+        contractor_proposed_solution: validatedData.contractor_proposed_solution || null,
+        discipline: validatedData.discipline || null,
+        system: validatedData.system || null,
+        work_impact: validatedData.work_impact || null,
+        cost_impact: validatedData.cost_impact || null,
+        schedule_impact: validatedData.schedule_impact || null,
+        test_package: validatedData.test_package || null,
+        schedule_id: validatedData.schedule_id || null,
+        block_area: validatedData.block_area || null,
         status: validatedData.status,
-        priority: validatedData.urgency === 'urgent' ? 'high' : 'low',
+        urgency: validatedData.urgency,
         assigned_to: null,
         due_date: null,
-        created_by: 'user1', // TODO: Replace with actual user ID from auth
-        response: null,
-        response_date: null,
-        attachments: [],
+        created_by: user.id,
+        client_response: null,
+        date_sent: null,
+        date_responded: null,
       };
-
-      const { data: newRFI, error } = await supabase
+      
+      console.log('💾 Creating RFI with data:', newRFIData);
+      
+      // Insert RFI into database
+      const { data: rfiData, error: rfiError } = await supabase
         .from('rfis')
         .insert(newRFIData)
         .select()
         .single();
-
-      if (error) {
-        const message = 'Failed to create RFI: ' + error.message;
-        setError(message);
-        throw new Error(message);
+      
+      if (rfiError) {
+        console.error('❌ RFI creation error:', rfiError);
+        throw rfiError;
       }
-
-      const rfi = newRFI as RFI;
-      setRFIs(prev => [...prev, rfi]);
-      return rfi;
+      
+      console.log('✅ RFI created successfully:', rfiData);
+      
+      // Create cost items if there are any cost inputs
+      await createCostItemsFromLegacyFields(rfiData.id, data);
+      
+      // Fetch the complete RFI with cost items
+      const costItems = await fetchCostItems(rfiData.id);
+      
+      // Convert database RFI to our RFI interface
+      const newRFI: RFI = {
+        id: rfiData.id,
+        rfi_number: rfiData.rfi_number,
+        project_id: rfiData.project_id,
+        subject: rfiData.subject,
+        description: rfiData.reason_for_rfi, // Map reason_for_rfi to description
+        status: rfiData.status as any,
+        priority: 'medium', // Default priority
+        assigned_to: rfiData.assigned_to,
+        due_date: rfiData.due_date,
+        created_by: rfiData.created_by,
+        created_at: rfiData.created_at,
+        updated_at: rfiData.updated_at,
+        response: rfiData.client_response,
+        response_date: rfiData.date_responded,
+        attachments: [],
+        cost_items: costItems,
+        // Legacy cost fields for compatibility
+        manhours: data.manhours,
+        labor_costs: data.labor_costs,
+        material_costs: data.material_costs,
+        equipment_costs: data.equipment_costs,
+        subcontractor_costs: data.subcontractor_costs,
+      };
+      
+      setRFIs(prev => [...prev, newRFI]);
+      setCurrentRFI(newRFI);
+      return newRFI;
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to create RFI';
+      const message = handleSupabaseError(err);
       setError(message);
       throw new Error(message);
     } finally {
@@ -87,9 +267,39 @@ export function useRFIs() {
         throw new Error(message);
       }
       
-      const rfiData = data as RFI[];
-      setRFIs(rfiData);
-      return rfiData;
+      // Convert database RFIs to our RFI interface and fetch cost items
+      const rfisWithCostItems: RFI[] = await Promise.all(
+        (data || []).map(async (rfiData) => {
+          const costItems = await fetchCostItems(rfiData.id);
+          
+          return {
+            id: rfiData.id,
+            rfi_number: rfiData.rfi_number,
+            project_id: rfiData.project_id,
+            subject: rfiData.subject,
+            description: rfiData.reason_for_rfi || '',
+            status: rfiData.status as any,
+            priority: 'medium' as any, // Default priority
+            assigned_to: rfiData.assigned_to,
+            due_date: rfiData.due_date,
+            created_by: rfiData.created_by,
+            created_at: rfiData.created_at,
+            updated_at: rfiData.updated_at,
+            response: rfiData.client_response,
+            response_date: rfiData.date_responded,
+            attachments: [],
+            cost_items: costItems,
+            // Calculate legacy cost fields from cost items for compatibility
+            labor_costs: costItems.filter(item => item.cost_type === 'labor').reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0) || undefined,
+            material_costs: costItems.filter(item => item.cost_type === 'material').reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0) || undefined,
+            equipment_costs: costItems.filter(item => item.cost_type === 'equipment').reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0) || undefined,
+            subcontractor_costs: costItems.filter(item => item.cost_type === 'subcontractor').reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0) || undefined,
+          } as RFI;
+        })
+      );
+      
+      setRFIs(rfisWithCostItems);
+      return rfisWithCostItems;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch RFIs';
       setError(message);
@@ -121,7 +331,34 @@ export function useRFIs() {
         throw new Error(message);
       }
       
-      const rfi = data as RFI;
+      // Fetch cost items for this RFI
+      const costItems = await fetchCostItems(id);
+      
+      // Convert database RFI to our RFI interface
+      const rfi: RFI = {
+        id: data.id,
+        rfi_number: data.rfi_number,
+        project_id: data.project_id,
+        subject: data.subject,
+        description: data.reason_for_rfi || '',
+        status: data.status as any,
+        priority: 'medium' as any, // Default priority
+        assigned_to: data.assigned_to,
+        due_date: data.due_date,
+        created_by: data.created_by,
+        created_at: data.created_at,
+        updated_at: data.updated_at,
+        response: data.client_response,
+        response_date: data.date_responded,
+        attachments: [],
+        cost_items: costItems,
+        // Calculate legacy cost fields from cost items for compatibility
+        labor_costs: costItems.filter(item => item.cost_type === 'labor').reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0) || undefined,
+        material_costs: costItems.filter(item => item.cost_type === 'material').reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0) || undefined,
+        equipment_costs: costItems.filter(item => item.cost_type === 'equipment').reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0) || undefined,
+        subcontractor_costs: costItems.filter(item => item.cost_type === 'subcontractor').reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0) || undefined,
+      };
+      
       setCurrentRFI(rfi);
       return rfi;
     } catch (err) {
@@ -243,13 +480,19 @@ export function useRFIs() {
   }, [updateRFI]);
 
   // RFI Numbering Logic
-  const generateRFINumber = useCallback(async (): Promise<string> => {
+  const generateRFINumber = useCallback(async (projectId?: string): Promise<string> => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('rfis')
         .select('rfi_number')
-        .order('created_at', { ascending: false })
-        .limit(1);
+        .order('created_at', { ascending: false });
+      
+      // If projectId is provided, filter by project
+      if (projectId) {
+        query = query.eq('project_id', projectId);
+      }
+      
+      const { data, error } = await query.limit(1);
 
       if (error) {
         throw new Error('Failed to generate RFI number: ' + error.message);
@@ -266,8 +509,8 @@ export function useRFIs() {
     }
   }, []);
 
-  const getNextRFINumber = useCallback(async (): Promise<string> => {
-    return generateRFINumber();
+  const getNextRFINumber = useCallback(async (projectId?: string): Promise<string> => {
+    return generateRFINumber(projectId);
   }, [generateRFINumber]);
 
   // Utility Functions
@@ -306,6 +549,7 @@ export function useRFIs() {
     submitResponse,
     
     // Utility Functions
+    getNextRFINumber,
     filterRFIsByStatus,
     getRFIsByProject,
     overdueRFIs,

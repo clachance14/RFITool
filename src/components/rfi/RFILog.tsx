@@ -3,13 +3,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { format } from 'date-fns';
 import Link from 'next/link';
-import { useRFIs } from '@/contexts/RFIContext';
+import { useRFIs } from '@/hooks/useRFIs';
 import { useProjects } from '@/hooks/useProjects';
 import type { RFI, RFIStatus } from '@/lib/types';
 
 export function RFILog() {
-  const { rfis, loading, getRFIs } = useRFIs();
-  const { projects } = useProjects();
+  const { rfis, getRFIs, loading } = useRFIs();
+  const { projects, refetch } = useProjects();
   const [sortField, setSortField] = useState<keyof RFI>('created_at');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [statusFilter, setStatusFilter] = useState<RFIStatus | 'all'>('all');
@@ -17,8 +17,14 @@ export function RFILog() {
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    getRFIs();
-  }, [getRFIs]);
+    const loadData = async () => {
+      await Promise.all([
+        getRFIs(),
+        refetch()
+      ]);
+    };
+    loadData();
+  }, [getRFIs, refetch]);
 
   const getProjectName = (projectId: string) => {
     const project = projects.find(p => p.id === projectId);
@@ -52,6 +58,12 @@ export function RFILog() {
   };
 
   const calculateTotalCost = (rfi: RFI): number => {
+    // If RFI has cost_items, calculate from those
+    if (rfi.cost_items && rfi.cost_items.length > 0) {
+      return rfi.cost_items.reduce((total, item) => total + (item.quantity * item.unit_cost), 0);
+    }
+    
+    // Otherwise, use legacy cost fields
     const laborCosts = rfi.labor_costs || 0;
     const materialCosts = rfi.material_costs || 0;
     const equipmentCosts = rfi.equipment_costs || 0;

@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { createRFISchema } from '@/lib/validations';
 import type { CreateRFIInput } from '@/lib/types';
 import { useProjects } from '@/hooks/useProjects';
-import { useRFIs } from '@/contexts/RFIContext';
+import { useRFIs } from '@/hooks/useRFIs';
 import ProjectSelect from '@/components/project/ProjectSelect';
 
 export function SimpleRFIFormWorking() {
@@ -150,7 +150,50 @@ export function SimpleRFIFormWorking() {
   };
 
   const onSubmit = async (data: CreateRFIInput) => {
-    console.log('Form submitted with data:', data);
+    console.log('📋 Form submitted with complete data:', data);
+    
+    // Debug: Check the current form values directly
+    const watchedValues = {
+      manhours: form.watch('manhours'),
+      labor_costs: form.watch('labor_costs'),
+      material_costs: form.watch('material_costs'),
+      equipment_costs: form.watch('equipment_costs'),
+      subcontractor_costs: form.watch('subcontractor_costs'),
+    };
+    console.log('🔍 Current form values from watch:', watchedValues);
+    
+    // Debug: Check the DOM input values directly
+    const domValues = {
+      manhours: (document.getElementById('manhours') as HTMLInputElement)?.value,
+      labor_costs: (document.getElementById('labor_costs') as HTMLInputElement)?.value,
+      material_costs: (document.getElementById('material_costs') as HTMLInputElement)?.value,
+      equipment_costs: (document.getElementById('equipment_costs') as HTMLInputElement)?.value,
+      subcontractor_costs: (document.getElementById('subcontractor_costs') as HTMLInputElement)?.value,
+    };
+    console.log('🔍 DOM input values:', domValues);
+    
+    // Debug: Check if form data matches watch data
+    const submittedValues = {
+      manhours: data.manhours,
+      labor_costs: data.labor_costs,
+      material_costs: data.material_costs,
+      equipment_costs: data.equipment_costs,
+      subcontractor_costs: data.subcontractor_costs,
+    };
+    console.log('💰 Cost data being submitted:', submittedValues);
+    
+    // Check for data tampering
+    const isDataTampered = JSON.stringify(watchedValues) !== JSON.stringify(submittedValues);
+    console.log('🚨 DATA TAMPERING DETECTED:', isDataTampered);
+    if (isDataTampered) {
+      console.log('⚠️ Browser extension or script may be modifying form data!');
+      console.log('Expected:', watchedValues);
+      console.log('Received:', submittedValues);
+      
+      // Use watched values as fallback
+      Object.assign(data, watchedValues);
+      console.log('✅ Using watched values as fallback:', data);
+    }
     try {
       setIsSubmitting(true);
       setSubmitMessage('');
@@ -444,7 +487,15 @@ export function SimpleRFIFormWorking() {
                       name="hasCostImpact"
                       value="no"
                       checked={!hasCostImpact}
-                      onChange={() => setHasCostImpact(false)}
+                      onChange={() => {
+                        setHasCostImpact(false);
+                        // Clear cost fields when "No" is selected
+                        form.setValue('manhours', undefined);
+                        form.setValue('labor_costs', undefined);
+                        form.setValue('material_costs', undefined);
+                        form.setValue('equipment_costs', undefined);
+                        form.setValue('subcontractor_costs', undefined);
+                      }}
                       className="mr-2 text-blue-600 focus:ring-blue-500"
                     />
                     <span className="text-sm text-gray-700">No</span>
@@ -464,82 +515,105 @@ export function SimpleRFIFormWorking() {
               </div>
 
               {/* Cost Impact Details - Show only if hasCostImpact is true */}
-              {hasCostImpact && (
-                <div className="bg-gray-50 p-4 rounded-md border border-gray-200">
-                  <h4 className="text-sm font-semibold text-gray-800 mb-3">Cost Impact Details</h4>
-                  <div className="space-y-3">
-                    <div>
-                      <label htmlFor="manhours" className="block text-xs font-medium text-gray-700 mb-1">
-                        Manhours
-                      </label>
-                      <input
-                        id="manhours"
-                        type="number"
-                        step="0.5"
-                        {...form.register('manhours', { valueAsNumber: true })}
-                        className="w-full border border-gray-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="Enter manhours..."
-                      />
-                    </div>
-                    
-                    <div>
-                      <label htmlFor="labor_costs" className="block text-xs font-medium text-gray-700 mb-1">
-                        Labor Costs ($)
-                      </label>
-                      <input
-                        id="labor_costs"
-                        type="number"
-                        step="0.01"
-                        {...form.register('labor_costs', { valueAsNumber: true })}
-                        className="w-full border border-gray-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="Enter labor costs..."
-                      />
-                    </div>
-                    
-                    <div>
-                      <label htmlFor="material_costs" className="block text-xs font-medium text-gray-700 mb-1">
-                        Material Costs ($)
-                      </label>
-                      <input
-                        id="material_costs"
-                        type="number"
-                        step="0.01"
-                        {...form.register('material_costs', { valueAsNumber: true })}
-                        className="w-full border border-gray-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="Enter material costs..."
-                      />
-                    </div>
-                    
-                    <div>
-                      <label htmlFor="equipment_costs" className="block text-xs font-medium text-gray-700 mb-1">
-                        Equipment Costs ($)
-                      </label>
-                      <input
-                        id="equipment_costs"
-                        type="number"
-                        step="0.01"
-                        {...form.register('equipment_costs', { valueAsNumber: true })}
-                        className="w-full border border-gray-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="Enter equipment costs..."
-                      />
-                    </div>
-                    
-                    <div>
-                      <label htmlFor="subcontractor_costs" className="block text-xs font-medium text-gray-700 mb-1">
-                        Subcontractor Costs ($)
-                      </label>
-                      <input
-                        id="subcontractor_costs"
-                        type="number"
-                        step="0.01"
-                        {...form.register('subcontractor_costs', { valueAsNumber: true })}
-                        className="w-full border border-gray-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="Enter subcontractor costs..."
-                      />
-                    </div>
+              <div className={`bg-gray-50 p-4 rounded-md border border-gray-200 ${!hasCostImpact ? 'hidden' : ''}`}>
+                <h4 className="text-sm font-semibold text-gray-800 mb-3">Cost Impact Details</h4>
+                <div className="space-y-3">
+                  <div>
+                    <label htmlFor="manhours" className="block text-xs font-medium text-gray-700 mb-1">
+                      Manhours
+                    </label>
+                    <input
+                      id="manhours"
+                      type="number"
+                      step="0.5"
+                      {...form.register('manhours', { valueAsNumber: true })}
+                      className={`w-full border border-gray-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${!hasCostImpact ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                      placeholder="Enter manhours..."
+                      onFocus={(e) => {
+                        if (!hasCostImpact) {
+                          e.target.blur();
+                        }
+                      }}
+                    />
+                  </div>
+                  
+                  <div>
+                    <label htmlFor="labor_costs" className="block text-xs font-medium text-gray-700 mb-1">
+                      Labor Costs ($)
+                    </label>
+                    <input
+                      id="labor_costs"
+                      type="number"
+                      step="0.01"
+                      {...form.register('labor_costs', { valueAsNumber: true })}
+                      className={`w-full border border-gray-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${!hasCostImpact ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                      placeholder="Enter labor costs..."
+                      onFocus={(e) => {
+                        if (!hasCostImpact) {
+                          e.target.blur();
+                        }
+                      }}
+                    />
+                  </div>
+                  
+                  <div>
+                    <label htmlFor="material_costs" className="block text-xs font-medium text-gray-700 mb-1">
+                      Material Costs ($)
+                    </label>
+                    <input
+                      id="material_costs"
+                      type="number"
+                      step="0.01"
+                      {...form.register('material_costs', { valueAsNumber: true })}
+                      className={`w-full border border-gray-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${!hasCostImpact ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                      placeholder="Enter material costs..."
+                      onFocus={(e) => {
+                        if (!hasCostImpact) {
+                          e.target.blur();
+                        }
+                      }}
+                    />
+                  </div>
+                  
+                  <div>
+                    <label htmlFor="equipment_costs" className="block text-xs font-medium text-gray-700 mb-1">
+                      Equipment Costs ($)
+                    </label>
+                    <input
+                      id="equipment_costs"
+                      type="number"
+                      step="0.01"
+                      {...form.register('equipment_costs', { valueAsNumber: true })}
+                      className={`w-full border border-gray-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${!hasCostImpact ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                      placeholder="Enter equipment costs..."
+                      onFocus={(e) => {
+                        if (!hasCostImpact) {
+                          e.target.blur();
+                        }
+                      }}
+                    />
+                  </div>
+                  
+                  <div>
+                    <label htmlFor="subcontractor_costs" className="block text-xs font-medium text-gray-700 mb-1">
+                      Subcontractor Costs ($)
+                    </label>
+                    <input
+                      id="subcontractor_costs"
+                      type="number"
+                      step="0.01"
+                      {...form.register('subcontractor_costs', { valueAsNumber: true })}
+                      className={`w-full border border-gray-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${!hasCostImpact ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                      placeholder="Enter subcontractor costs..."
+                      onFocus={(e) => {
+                        if (!hasCostImpact) {
+                          e.target.blur();
+                        }
+                      }}
+                    />
                   </div>
                 </div>
-              )}
+              </div>
 
               <div>
                 <label htmlFor="schedule_impact" className="block text-sm font-medium text-gray-700 mb-1">

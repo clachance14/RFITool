@@ -135,13 +135,19 @@ export function RfiDetailView({ rfi }: RfiDetailViewProps) {
               <div>
                 <label className="font-semibold text-gray-700">Cost Impact:</label>
                 <p className={`font-medium ${
-                  (rfi.labor_costs || 0) + (rfi.material_costs || 0) + (rfi.equipment_costs || 0) + (rfi.subcontractor_costs || 0) > 0 
-                    ? 'text-red-600' 
-                    : 'text-green-600'
+                  (rfi.cost_items && rfi.cost_items.length > 0) ? 
+                    (rfi.cost_items.reduce((total, item) => total + (item.quantity * item.unit_cost), 0) > 0 ? 'text-red-600' : 'text-green-600') :
+                    ((rfi.labor_costs || 0) + (rfi.material_costs || 0) + (rfi.equipment_costs || 0) + (rfi.subcontractor_costs || 0) > 0 ? 'text-red-600' : 'text-green-600')
                 }`}>
-                  {(rfi.labor_costs || 0) + (rfi.material_costs || 0) + (rfi.equipment_costs || 0) + (rfi.subcontractor_costs || 0) > 0 
-                    ? `$${((rfi.labor_costs || 0) + (rfi.material_costs || 0) + (rfi.equipment_costs || 0) + (rfi.subcontractor_costs || 0)).toLocaleString()}` 
-                    : 'No Cost Impact'
+                  {(rfi.cost_items && rfi.cost_items.length > 0) ? 
+                    (rfi.cost_items.reduce((total, item) => total + (item.quantity * item.unit_cost), 0) > 0 ? 
+                      `$${rfi.cost_items.reduce((total, item) => total + (item.quantity * item.unit_cost), 0).toLocaleString()}` : 
+                      'No Cost Impact'
+                    ) :
+                    ((rfi.labor_costs || 0) + (rfi.material_costs || 0) + (rfi.equipment_costs || 0) + (rfi.subcontractor_costs || 0) > 0 ? 
+                      `$${((rfi.labor_costs || 0) + (rfi.material_costs || 0) + (rfi.equipment_costs || 0) + (rfi.subcontractor_costs || 0)).toLocaleString()}` : 
+                      'No Cost Impact'
+                    )
                   }
                 </p>
               </div>
@@ -161,49 +167,103 @@ export function RfiDetailView({ rfi }: RfiDetailViewProps) {
           </div>
 
           {/* Cost Breakdown Section - Only show if there are costs */}
-          {((rfi.labor_costs || 0) + (rfi.material_costs || 0) + (rfi.equipment_costs || 0) + (rfi.subcontractor_costs || 0) > 0 || (rfi.manhours || 0) > 0) && (
+          {(rfi.cost_items && rfi.cost_items.length > 0) || ((rfi.labor_costs || 0) + (rfi.material_costs || 0) + (rfi.equipment_costs || 0) + (rfi.subcontractor_costs || 0) > 0 || (rfi.manhours || 0) > 0) && (
             <div className="px-8 py-4 border-b border-gray-200">
               <h3 className="text-base font-semibold text-gray-900 mb-3">Cost Impact Breakdown</h3>
-              <div className="bg-gray-50 border border-gray-200 rounded p-4">
-                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 text-sm">
-                  {(rfi.manhours || 0) > 0 && (
-                    <div>
-                      <div className="font-medium text-gray-900">{rfi.manhours}</div>
-                      <div className="text-xs text-gray-600">Manhours</div>
-                    </div>
-                  )}
-                  {(rfi.labor_costs || 0) > 0 && (
-                    <div>
-                      <div className="font-medium text-gray-900">${(rfi.labor_costs || 0).toLocaleString()}</div>
-                      <div className="text-xs text-gray-600">Labor</div>
-                    </div>
-                  )}
-                  {(rfi.material_costs || 0) > 0 && (
-                    <div>
-                      <div className="font-medium text-gray-900">${(rfi.material_costs || 0).toLocaleString()}</div>
-                      <div className="text-xs text-gray-600">Materials</div>
-                    </div>
-                  )}
-                  {(rfi.equipment_costs || 0) > 0 && (
-                    <div>
-                      <div className="font-medium text-gray-900">${(rfi.equipment_costs || 0).toLocaleString()}</div>
-                      <div className="text-xs text-gray-600">Equipment</div>
-                    </div>
-                  )}
-                  {(rfi.subcontractor_costs || 0) > 0 && (
-                    <div>
-                      <div className="font-medium text-gray-900">${(rfi.subcontractor_costs || 0).toLocaleString()}</div>
-                      <div className="text-xs text-gray-600">Subcontractor</div>
-                    </div>
-                  )}
-                  <div className="bg-white border border-gray-300 rounded px-2 py-1">
-                    <div className="font-semibold text-gray-900">
-                      ${((rfi.labor_costs || 0) + (rfi.material_costs || 0) + (rfi.equipment_costs || 0) + (rfi.subcontractor_costs || 0)).toLocaleString()}
-                    </div>
-                    <div className="text-xs text-gray-600">Total</div>
+              
+              {rfi.cost_items && rfi.cost_items.length > 0 ? (
+                /* New cost items table */
+                <div className="bg-gray-50 border border-gray-200 rounded p-4">
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full">
+                      <thead>
+                        <tr className="text-xs text-gray-600 uppercase tracking-wider">
+                          <th className="px-3 py-2 text-left">Description</th>
+                          <th className="px-3 py-2 text-left">Type</th>
+                          <th className="px-3 py-2 text-right">Quantity</th>
+                          <th className="px-3 py-2 text-left">Unit</th>
+                          <th className="px-3 py-2 text-right">Unit Cost</th>
+                          <th className="px-3 py-2 text-right">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {rfi.cost_items.map((item, index) => (
+                          <tr key={index} className="text-sm">
+                            <td className="px-3 py-2 text-gray-900">{item.description}</td>
+                            <td className="px-3 py-2">
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                item.cost_type === 'labor' ? 'bg-blue-100 text-blue-800' :
+                                item.cost_type === 'material' ? 'bg-green-100 text-green-800' :
+                                item.cost_type === 'equipment' ? 'bg-purple-100 text-purple-800' :
+                                item.cost_type === 'subcontractor' ? 'bg-orange-100 text-orange-800' :
+                                'bg-gray-100 text-gray-800'
+                              }`}>
+                                {item.cost_type}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2 text-right text-gray-900">{item.quantity.toLocaleString()}</td>
+                            <td className="px-3 py-2 text-gray-600">{item.unit}</td>
+                            <td className="px-3 py-2 text-right text-gray-900">${item.unit_cost.toLocaleString()}</td>
+                            <td className="px-3 py-2 text-right font-medium text-gray-900">
+                              ${(item.quantity * item.unit_cost).toLocaleString()}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="border-t-2 border-gray-300">
+                          <td colSpan={5} className="px-3 py-2 text-right font-semibold text-gray-900">Total Cost:</td>
+                          <td className="px-3 py-2 text-right font-bold text-lg text-gray-900">
+                            ${rfi.cost_items.reduce((total, item) => total + (item.quantity * item.unit_cost), 0).toLocaleString()}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
                   </div>
                 </div>
-              </div>
+              ) : (
+                /* Legacy cost display */
+                <div className="bg-gray-50 border border-gray-200 rounded p-4">
+                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 text-sm">
+                    {(rfi.manhours || 0) > 0 && (
+                      <div>
+                        <div className="font-medium text-gray-900">{rfi.manhours}</div>
+                        <div className="text-xs text-gray-600">Manhours</div>
+                      </div>
+                    )}
+                    {(rfi.labor_costs || 0) > 0 && (
+                      <div>
+                        <div className="font-medium text-gray-900">${(rfi.labor_costs || 0).toLocaleString()}</div>
+                        <div className="text-xs text-gray-600">Labor</div>
+                      </div>
+                    )}
+                    {(rfi.material_costs || 0) > 0 && (
+                      <div>
+                        <div className="font-medium text-gray-900">${(rfi.material_costs || 0).toLocaleString()}</div>
+                        <div className="text-xs text-gray-600">Materials</div>
+                      </div>
+                    )}
+                    {(rfi.equipment_costs || 0) > 0 && (
+                      <div>
+                        <div className="font-medium text-gray-900">${(rfi.equipment_costs || 0).toLocaleString()}</div>
+                        <div className="text-xs text-gray-600">Equipment</div>
+                      </div>
+                    )}
+                    {(rfi.subcontractor_costs || 0) > 0 && (
+                      <div>
+                        <div className="font-medium text-gray-900">${(rfi.subcontractor_costs || 0).toLocaleString()}</div>
+                        <div className="text-xs text-gray-600">Subcontractor</div>
+                      </div>
+                    )}
+                    <div className="bg-white border border-gray-300 rounded px-2 py-1">
+                      <div className="font-semibold text-gray-900">
+                        ${((rfi.labor_costs || 0) + (rfi.material_costs || 0) + (rfi.equipment_costs || 0) + (rfi.subcontractor_costs || 0)).toLocaleString()}
+                      </div>
+                      <div className="text-xs text-gray-600">Total</div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

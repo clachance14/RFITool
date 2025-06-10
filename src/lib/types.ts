@@ -3,6 +3,7 @@ export interface Project {
   
   // Project Identification
   project_name: string;
+  contractor_job_number: string;
   job_contract_number: string;
   client_company_name: string;
   company_id?: string; // Optional during testing phase
@@ -35,6 +36,21 @@ export type RFIStatus = 'draft' | 'sent' | 'responded' | 'overdue';
 // RFI Priority Types
 export type RFIPriority = 'low' | 'medium' | 'high';
 
+// RFI Cost Types
+export type RFICostType = 'labor' | 'material' | 'equipment' | 'subcontractor' | 'other';
+
+// RFI Cost Item Interface
+export interface RFICostItem {
+  id: string;
+  rfi_id: string;
+  description: string;
+  cost_type: RFICostType;
+  quantity: number;
+  unit: string;
+  unit_cost: number;
+  created_at: string;
+}
+
 // RFI Interface
 export interface RFI {
   id: string;
@@ -52,12 +68,14 @@ export interface RFI {
   response: string | null;
   response_date: string | null;
   attachments: string[];
-  // Cost Impact Details
+  // Cost Impact Details (legacy fields for compatibility)
   manhours?: number;
   labor_costs?: number;
   material_costs?: number;
   equipment_costs?: number;
   subcontractor_costs?: number;
+  // Cost Items (new normalized structure)
+  cost_items?: RFICostItem[];
 }
 
 export interface User {
@@ -84,17 +102,6 @@ export interface UserProfile {
   role: 'admin' | 'user';
   created_at: string;
   updated_at: string;
-}
-
-export interface ProjectFormData {
-  name: string;
-  client_name: string;
-  job_number: string;
-  contract_number: string;
-  start_date: string;
-  end_date?: string;
-  status?: 'active' | 'completed' | 'on_hold';
-  description: string;
 }
 
 // Form Input Types
@@ -152,6 +159,7 @@ export interface ApiResponse<T> {
 // Create/Update input types
 export interface CreateProjectInput {
   project_name: string;
+  contractor_job_number: string;
   job_contract_number: string;
   client_company_name: string;
   company_id?: string; // Optional during testing phase
