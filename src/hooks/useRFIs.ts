@@ -3,6 +3,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import { RFI, CreateRFIInput, UpdateRFIInput, RFIStatus } from '@/lib/types';
 import { createRFISchema, updateRFISchema } from '@/lib/validations';
+import { supabase } from '@/lib/supabase';
 
 // Types for the hook
 type RFIResponse = {
@@ -11,46 +12,8 @@ type RFIResponse = {
   error?: string;
 };
 
-// Mock data for development
-const mockRFIs: RFI[] = [
-  {
-    id: '1',
-    rfi_number: 'RFI-001',
-    project_id: '1',
-    subject: 'Foundation Design Clarification',
-    description: 'Need clarification on foundation design specifications',
-    status: 'draft',
-    priority: 'low',
-    assigned_to: null,
-    due_date: null,
-    created_by: 'user1',
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-    response: null,
-    response_date: null,
-    attachments: [],
-  },
-  {
-    id: '2',
-    rfi_number: 'RFI-002',
-    project_id: '1',
-    subject: 'Structural Steel Specifications',
-    description: 'Need clarification on steel grade requirements',
-    status: 'sent',
-    priority: 'high',
-    assigned_to: 'user2',
-    due_date: '2024-02-01T00:00:00Z',
-    created_by: 'user1',
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-    response: 'Test Response',
-    response_date: '2024-01-03T00:00:00Z',
-    attachments: ['attachment-1'],
-  },
-];
-
 export function useRFIs() {
-  const [rfis, setRFIs] = useState<RFI[]>(mockRFIs);
+  const [rfis, setRFIs] = useState<RFI[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentRFI, setCurrentRFI] = useState<RFI | null>(null);
@@ -66,9 +29,8 @@ export function useRFIs() {
       // Generate RFI number
       const rfiNumber = await getNextRFINumber();
       
-      // Create new RFI
-      const newRFI: RFI = {
-        id: Math.random().toString(36).substr(2, 9), // Mock ID generation
+      // Create new RFI data
+      const newRFIData = {
         rfi_number: rfiNumber,
         project_id: validatedData.project_id,
         subject: validatedData.subject,
@@ -77,16 +39,27 @@ export function useRFIs() {
         priority: validatedData.urgency === 'urgent' ? 'high' : 'low',
         assigned_to: null,
         due_date: null,
-        created_by: 'user1', // Mock user ID
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+        created_by: 'user1', // TODO: Replace with actual user ID from auth
         response: null,
         response_date: null,
         attachments: [],
       };
 
-      setRFIs(prev => [...prev, newRFI]);
-      return newRFI;
+      const { data: newRFI, error } = await supabase
+        .from('rfis')
+        .insert(newRFIData)
+        .select()
+        .single();
+
+      if (error) {
+        const message = 'Failed to create RFI: ' + error.message;
+        setError(message);
+        throw new Error(message);
+      }
+
+      const rfi = newRFI as RFI;
+      setRFIs(prev => [...prev, rfi]);
+      return rfi;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create RFI';
       setError(message);
@@ -100,14 +73,23 @@ export function useRFIs() {
     setLoading(true);
     setError(null);
     try {
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 500));
+      let query = supabase.from('rfis').select('*');
       
-      const filteredRFIs = projectId 
-        ? rfis.filter(rfi => rfi.project_id === projectId)
-        : rfis;
+      if (projectId) {
+        query = query.eq('project_id', projectId);
+      }
       
-      return filteredRFIs;
+      const { data, error } = await query;
+      
+      if (error) {
+        const message = 'Failed to fetch RFIs: ' + error.message;
+        setError(message);
+        throw new Error(message);
+      }
+      
+      const rfiData = data as RFI[];
+      setRFIs(rfiData);
+      return rfiData;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch RFIs';
       setError(message);
@@ -115,20 +97,31 @@ export function useRFIs() {
     } finally {
       setLoading(false);
     }
-  }, [rfis]);
+  }, []);
 
   const getRFIById = useCallback(async (id: string): Promise<RFI> => {
     setLoading(true);
     setError(null);
     try {
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 500));
+      const { data, error } = await supabase
+        .from('rfis')
+        .select('*')
+        .eq('id', id)
+        .single();
       
-      const rfi = rfis.find(r => r.id === id);
-      if (!rfi) {
-        throw new Error('RFI not found');
+      if (error) {
+        const message = 'Failed to fetch RFI: ' + error.message;
+        setError(message);
+        throw new Error(message);
       }
       
+      if (!data) {
+        const message = 'RFI not found';
+        setError(message);
+        throw new Error(message);
+      }
+      
+      const rfi = data as RFI;
       setCurrentRFI(rfi);
       return rfi;
     } catch (err) {
@@ -138,7 +131,7 @@ export function useRFIs() {
     } finally {
       setLoading(false);
     }
-  }, [rfis]);
+  }, []);
 
   const updateRFI = useCallback(async (id: string, data: UpdateRFIInput): Promise<RFI> => {
     setLoading(true);
@@ -147,17 +140,29 @@ export function useRFIs() {
       // Validate input data
       const validatedData = updateRFISchema.parse(data);
       
-      const existingRFI = rfis.find(r => r.id === id);
-      if (!existingRFI) {
-        throw new Error('RFI not found');
+      const { data: updatedData, error } = await supabase
+        .from('rfis')
+        .update({
+          ...validatedData,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) {
+        const message = 'Failed to update RFI: ' + error.message;
+        setError(message);
+        throw new Error(message);
       }
 
-      const updatedRFI: RFI = {
-        ...existingRFI,
-        ...validatedData,
-        updated_at: new Date().toISOString(),
-      };
+      if (!updatedData) {
+        const message = 'RFI not found';
+        setError(message);
+        throw new Error(message);
+      }
 
+      const updatedRFI = updatedData as RFI;
       setRFIs(prev => prev.map(rfi => rfi.id === id ? updatedRFI : rfi));
       setCurrentRFI(updatedRFI);
       return updatedRFI;
@@ -168,14 +173,22 @@ export function useRFIs() {
     } finally {
       setLoading(false);
     }
-  }, [rfis]);
+  }, []);
 
   const deleteRFI = useCallback(async (id: string): Promise<void> => {
     setLoading(true);
     setError(null);
     try {
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 500));
+      const { error } = await supabase
+        .from('rfis')
+        .delete()
+        .eq('id', id);
+      
+      if (error) {
+        const message = 'Failed to delete RFI: ' + error.message;
+        setError(message);
+        throw new Error(message);
+      }
       
       setRFIs(prev => prev.filter(rfi => rfi.id !== id));
       if (currentRFI?.id === id) {
@@ -230,15 +243,28 @@ export function useRFIs() {
   }, [updateRFI]);
 
   // RFI Numbering Logic
-  const generateRFINumber = useCallback((): string => {
-    const lastRFI = [...rfis].sort((a, b) => 
-      parseInt(b.rfi_number.split('-')[1]) - parseInt(a.rfi_number.split('-')[1])
-    )[0];
-    
-    const lastNumber = lastRFI ? parseInt(lastRFI.rfi_number.split('-')[1]) : 0;
-    const nextNumber = lastNumber + 1;
-    return `RFI-${nextNumber.toString().padStart(3, '0')}`;
-  }, [rfis]);
+  const generateRFINumber = useCallback(async (): Promise<string> => {
+    try {
+      const { data, error } = await supabase
+        .from('rfis')
+        .select('rfi_number')
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (error) {
+        throw new Error('Failed to generate RFI number: ' + error.message);
+      }
+
+      const lastRFI = data?.[0];
+      const lastNumber = lastRFI ? parseInt(lastRFI.rfi_number.split('-')[1]) : 0;
+      const nextNumber = lastNumber + 1;
+      return `RFI-${nextNumber.toString().padStart(3, '0')}`;
+    } catch (err) {
+      // Fallback to timestamp-based numbering if query fails
+      const timestamp = Date.now().toString().slice(-6);
+      return `RFI-${timestamp}`;
+    }
+  }, []);
 
   const getNextRFINumber = useCallback(async (): Promise<string> => {
     return generateRFINumber();

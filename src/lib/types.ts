@@ -5,6 +5,7 @@ export interface Project {
   project_name: string;
   job_contract_number: string;
   client_company_name: string;
+  company_id?: string; // Optional during testing phase
   project_manager_contact: string;
   
   // Project Details
@@ -14,6 +15,9 @@ export interface Project {
   start_date?: string;
   expected_completion?: string;
   project_description?: string;
+  
+  // Logo URLs
+  client_logo_url?: string; // Client logo for this project
   
   // Default RFI Settings
   default_urgency: 'urgent' | 'non-urgent';
@@ -59,7 +63,24 @@ export interface RFI {
 export interface User {
   id: string;
   email: string;
+  name?: string;
+  role: 'admin' | 'user';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Company {
+  id: string;
   name: string;
+  logo_url?: string; // Contractor logo
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UserProfile {
+  id: string;
+  email: string;
+  company_id: string;
   role: 'admin' | 'user';
   created_at: string;
   updated_at: string;
@@ -133,6 +154,7 @@ export interface CreateProjectInput {
   project_name: string;
   job_contract_number: string;
   client_company_name: string;
+  company_id?: string; // Optional during testing phase
   project_manager_contact: string;
   location?: string;
   project_type?: 'mechanical' | 'civil' | 'ie' | 'other';
@@ -140,6 +162,7 @@ export interface CreateProjectInput {
   start_date?: string;
   expected_completion?: string;
   project_description?: string;
+  client_logo_url?: string; // Client logo URL
   default_urgency: 'urgent' | 'non-urgent';
   standard_recipients: string[];
   project_disciplines: string[];

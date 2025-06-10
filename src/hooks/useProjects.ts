@@ -3,116 +3,125 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Project, ProjectFormData } from '@/lib/types';
 import { CreateProjectInput } from '@/lib/validations';
+import { supabase, handleSupabaseError } from '@/lib/supabase';
 
 interface ApiResponse<T> {
   data?: T;
   error?: string;
 }
 
-// Mock data for development/testing
-const mockProjects: Project[] = [
-  {
-    id: '1',
-    project_name: 'Downtown Office Building',
-    job_contract_number: 'JOB-2024-001',
-    client_company_name: 'ABC Development Corp',
-    project_manager_contact: 'john.smith@abcdev.com',
-    standard_recipients: ['engineer@structural.com', 'architect@design.com'],
-    project_disciplines: ['Structural', 'Architectural', 'Mechanical'],
-    default_urgency: 'non-urgent' as const,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: '2',
-    project_name: 'Residential Complex Phase 2',
-    job_contract_number: 'JOB-2024-002',
-    client_company_name: 'Metro Housing LLC',
-    project_manager_contact: 'sarah.johnson@metrohousing.com',
-    standard_recipients: ['contractor@builds.com', 'inspector@city.gov'],
-    project_disciplines: ['Civil', 'Electrical', 'Plumbing'],
-    default_urgency: 'urgent' as const,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: '3',
-    project_name: 'Shopping Center Renovation',
-    job_contract_number: 'JOB-2024-003',
-    client_company_name: 'Retail Properties Inc',
-    project_manager_contact: 'mike.brown@retailprops.com',
-    standard_recipients: ['electrical@contractor.com', 'plumbing@services.com'],
-    project_disciplines: ['Electrical', 'HVAC', 'Fire Safety'],
-    default_urgency: 'non-urgent' as const,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-];
-
 export function useProjects() {
-  const [projects, setProjects] = useState<Project[]>(mockProjects);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const simulateDelay = () => new Promise(resolve => setTimeout(resolve, 500));
 
   const getProjects = useCallback(async (): Promise<ApiResponse<Project[]>> => {
     setLoading(true);
     setError(null);
     try {
-      await simulateDelay();
-      return { data: projects, error: undefined };
+      const { data, error } = await supabase
+        .from('projects')
+        .select('*');
+
+      if (error) {
+        throw error;
+      }
+
+      setProjects(data || []);
+      return { data, error: undefined };
+
     } catch (err) {
-      const errorMessage = 'Failed to fetch projects';
+      const errorMessage = handleSupabaseError(err);
       setError(errorMessage);
       return { error: errorMessage };
     } finally {
       setLoading(false);
     }
-  }, [projects]);
+  }, []);
 
   const getProject = useCallback(async (id: string): Promise<ApiResponse<Project>> => {
     setLoading(true);
     setError(null);
     try {
-      await simulateDelay();
-      const project = projects.find(p => p.id === id);
-      if (!project) {
+      const { data, error } = await supabase
+        .from('projects')
+        .select('*')
+        .eq('id', id)
+        .single();
+      
+      if (error) {
+        throw error;
+      }
+      
+      if (!data) {
         throw new Error('Project not found');
       }
-      return { data: project, error: undefined };
+      
+      return { data: data as Project, error: undefined };
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch project';
+      const errorMessage = handleSupabaseError(err);
       setError(errorMessage);
       return { error: errorMessage };
     } finally {
       setLoading(false);
     }
-  }, [projects]);
+  }, []);
 
   const createProject = useCallback(async (projectData: CreateProjectInput): Promise<ApiResponse<Project>> => {
     setLoading(true);
     setError(null);
     try {
-      await simulateDelay();
+      // Get the currently authenticated user's ID
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
       
-      const newProject: Project = {
-        id: Math.random().toString(36).substr(2, 9),
+      if (userError || !user) {
+        throw new Error('User not authenticated');
+      }
+      
+      // Get the user's company_id from the company_users table
+      const { data: companyUserData, error: companyUserError } = await supabase
+        .from('company_users')
+        .select('company_id')
+        .eq('user_id', user.id)
+        .single();
+      
+      if (companyUserError || !companyUserData) {
+        throw new Error('Unable to find user company association');
+      }
+      
+      const newProjectData = {
         project_name: projectData.project_name,
         job_contract_number: projectData.job_contract_number,
         client_company_name: projectData.client_company_name,
+        company_id: companyUserData.company_id, // Use the retrieved company_id
         project_manager_contact: projectData.project_manager_contact || '',
+        location: projectData.location,
+        project_type: projectData.project_type,
+        contract_value: projectData.contract_value,
+        start_date: projectData.start_date,
+        expected_completion: projectData.expected_completion,
+        project_description: projectData.project_description,
+        client_logo_url: projectData.client_logo_url,
         standard_recipients: projectData.standard_recipients || [],
         project_disciplines: projectData.project_disciplines || [],
         default_urgency: projectData.default_urgency || 'non-urgent',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
       };
       
+      const { data, error } = await supabase
+        .from('projects')
+        .insert(newProjectData)
+        .select()
+        .single();
+      
+      if (error) {
+        throw error;
+      }
+      
+      const newProject = data as Project;
       setProjects(prev => [...prev, newProject]);
       return { data: newProject, error: undefined };
     } catch (err) {
-      const errorMessage = 'Failed to create project';
+      const errorMessage = handleSupabaseError(err);
       setError(errorMessage);
       return { error: errorMessage };
     } finally {
@@ -124,42 +133,32 @@ export function useProjects() {
     setLoading(true);
     setError(null);
     try {
-      await simulateDelay();
+      const { data, error } = await supabase
+        .from('projects')
+        .update({
+          ...projectData,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id)
+        .select()
+        .single();
       
-      const projectIndex = projects.findIndex(p => p.id === id);
-      if (projectIndex === -1) {
+      if (error) {
+        throw error;
+      }
+      
+      if (!data) {
         throw new Error('Project not found');
       }
-
-      const updatedProject: Project = {
-        ...projects[projectIndex],
-        ...projectData,
-        updated_at: new Date().toISOString(),
-      };
-
+      
+      const updatedProject = data as Project;
       setProjects(prev => prev.map(project =>
         project.id === id ? updatedProject : project
       ));
       
       return { data: updatedProject, error: undefined };
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to update project';
-      setError(errorMessage);
-      return { error: errorMessage };
-    } finally {
-      setLoading(false);
-    }
-  }, [projects]);
-
-  const deleteProject = useCallback(async (id: string): Promise<ApiResponse<void>> => {
-    setLoading(true);
-    setError(null);
-    try {
-      await simulateDelay();
-      setProjects(prev => prev.filter(project => project.id !== id));
-      return { data: undefined, error: undefined };
-    } catch (err) {
-      const errorMessage = 'Failed to delete project';
+      const errorMessage = handleSupabaseError(err);
       setError(errorMessage);
       return { error: errorMessage };
     } finally {
@@ -167,7 +166,31 @@ export function useProjects() {
     }
   }, []);
 
-  // Load projects on mount (simulate initial fetch)
+  const deleteProject = useCallback(async (id: string): Promise<ApiResponse<void>> => {
+    setLoading(true);
+    setError(null);
+    try {
+      const { error } = await supabase
+        .from('projects')
+        .delete()
+        .eq('id', id);
+      
+      if (error) {
+        throw error;
+      }
+      
+      setProjects(prev => prev.filter(project => project.id !== id));
+      return { data: undefined, error: undefined };
+    } catch (err) {
+      const errorMessage = handleSupabaseError(err);
+      setError(errorMessage);
+      return { error: errorMessage };
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Load projects on mount
   useEffect(() => {
     getProjects();
   }, [getProjects]);

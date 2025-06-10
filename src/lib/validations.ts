@@ -115,6 +115,7 @@ export const createProjectSchema = z.object({
   project_name: z.string().min(1, 'Project name is required').max(200),
   job_contract_number: z.string().min(1, 'Contract number is required').max(100),
   client_company_name: z.string().min(1, 'Client company is required').max(200),
+  company_id: z.string().max(100).optional().or(z.literal('')).transform(val => val === '' ? undefined : val),
   project_manager_contact: z.string().min(1, 'Contact is required'),
   
   // Make these truly optional by transforming empty strings to undefined
@@ -127,6 +128,9 @@ export const createProjectSchema = z.object({
   start_date: z.string().optional().or(z.literal('')).transform(val => val === '' ? undefined : val),
   expected_completion: z.string().optional().or(z.literal('')).transform(val => val === '' ? undefined : val),
   project_description: z.string().max(1000).optional().or(z.literal('')).transform(val => val === '' ? undefined : val),
+  
+  // Logo URLs
+  client_logo_url: z.string().url().optional().or(z.literal('')).transform(val => val === '' ? undefined : val),
   
   default_urgency: z.enum(['urgent', 'non-urgent']),
   
