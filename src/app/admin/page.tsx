@@ -79,35 +79,87 @@ export default function AdminPage() {
           return;
         }
 
-        // Fetch all users from the same company with their roles
-        const { data: companyUsers, error: usersError } = await supabase
+        // First get company users with their role information
+        const { data: companyUsers, error: companyUsersError } = await supabase
           .from('company_users')
-          .select(`
-            user_id,
-            role_id,
-            created_at,
-            users!inner (
-              id,
-              email,
-              full_name
-            )
-          `)
+          .select('user_id, role_id')
           .eq('company_id', currentUserCompany.company_id);
 
-        if (usersError) {
-          console.error('Error fetching users:', usersError);
+        if (companyUsersError) {
+          console.error('Error fetching company users:', companyUsersError);
           return;
         }
 
-        // Transform the data to match our expected format
-        const transformedUsers = companyUsers?.map((cu: any) => ({
-          id: cu.user_id,
-          name: cu.users.full_name || cu.users.email,
-          email: cu.users.email,
-          role: ROLE_MAPPING[cu.role_id as keyof typeof ROLE_MAPPING] || 'rfi_user',
-          status: 'active', // For now, all users are active
-          lastLogin: new Date(cu.created_at).toLocaleDateString() || 'Never'
-        })) || [];
+        if (!companyUsers?.length) {
+          setUsers([]);
+          return;
+        }
+
+        // Get detailed user information from auth.users
+        const userIds = companyUsers.map(cu => cu.user_id);
+        
+        // Query auth.users directly for comprehensive user data
+        const { data: authUsers, error: authUsersError } = await supabase
+          .from('auth.users')
+          .select('id, email, raw_user_meta_data, created_at, updated_at, last_sign_in_at')
+          .in('id', userIds);
+
+        if (authUsersError) {
+          // Fallback to regular users table if auth.users is not accessible
+          const { data: regularUsers, error: regularUsersError } = await supabase
+            .from('users')
+            .select('id, email, full_name')
+            .in('id', userIds);
+
+           if (regularUsersError) {
+             console.error('Error fetching regular users:', regularUsersError);
+             return;
+           }
+
+           // Transform regular users data
+           const transformedUsers = companyUsers?.map((cu: any) => {
+             const user = regularUsers?.find(u => u.id === cu.user_id);
+             
+             return {
+               id: cu.user_id,
+               name: user?.full_name || user?.email || 'Unknown User',
+               email: user?.email || 'No email',
+               avatar_url: null,
+               role: ROLE_MAPPING[cu.role_id as keyof typeof ROLE_MAPPING] || 'rfi_user',
+               status: 'active',
+               lastLogin: 'Never',
+               createdAt: 'Unknown',
+               updatedAt: 'Unknown'
+             };
+           }) || [];
+
+          setUsers(transformedUsers);
+          return;
+        }
+
+        // Transform the data to include comprehensive user information
+        const transformedUsers = companyUsers?.map((cu: any) => {
+          const authUser = authUsers?.find(u => u.id === cu.user_id);
+          const fullName = authUser?.raw_user_meta_data?.full_name || 
+                          authUser?.raw_user_meta_data?.name ||
+                          authUser?.email?.split('@')[0] || 
+                          'Unknown User';
+          
+          return {
+            id: cu.user_id,
+            name: fullName,
+            email: authUser?.email || 'No email',
+            avatar_url: authUser?.raw_user_meta_data?.avatar_url || null,
+                             role: ROLE_MAPPING[cu.role_id as keyof typeof ROLE_MAPPING] || 'rfi_user',
+                 status: 'active',
+                 lastLogin: authUser?.last_sign_in_at ? 
+                   new Date(authUser.last_sign_in_at).toLocaleDateString() : 'Never',
+                 createdAt: authUser?.created_at ? 
+                   new Date(authUser.created_at).toLocaleDateString() : 'Unknown',
+                 updatedAt: authUser?.updated_at ? 
+                   new Date(authUser.updated_at).toLocaleDateString() : 'Unknown'
+          };
+        }) || [];
 
         setUsers(transformedUsers);
       } catch (error) {
@@ -284,15 +336,25 @@ export default function AdminPage() {
         .single();
 
       if (companyError || !currentUserCompany) {
+        console.error('Company lookup failed:', companyError);
         alert('Unable to determine your company. Please try again.');
+        return;
+      }
+
+      // Find the role_id for the selected role first
+      const roleId = Object.entries(ROLE_MAPPING).find(([id, role]) => role === newUser.role)?.[0];
+      
+      if (!roleId) {
+        alert('Invalid role selected');
         return;
       }
 
       // Check if user already exists in users table
       let userId;
+      let isNewUser = false;
       const { data: existingUser, error: userCheckError } = await supabase
         .from('users')
-        .select('id')
+        .select('id, status')
         .eq('email', newUser.email.trim().toLowerCase())
         .single();
 
@@ -300,31 +362,36 @@ export default function AdminPage() {
         // User exists, just add them to the company
         userId = existingUser.id;
       } else {
-        // Create new user
-        const { data: newUserData, error: createUserError } = await supabase
-          .from('users')
-          .insert({
+        // Send invitation via API route
+        const response = await fetch('/api/admin/invite-user', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
             email: newUser.email.trim().toLowerCase(),
-            full_name: newUser.name.trim()
-          })
-          .select()
-          .single();
+            fullName: newUser.name.trim(),
+            companyId: currentUserCompany.company_id,
+            roleId: parseInt(roleId),
+            invitedBy: session?.user?.email || 'system'
+          }),
+        });
 
-        if (createUserError || !newUserData) {
-          console.error('Error creating user:', createUserError);
-          alert('Failed to create user');
+        const result = await response.json();
+
+        if (!response.ok) {
+          console.error('Error sending invitation:', result.error);
+          alert('Failed to send invitation: ' + result.error);
           return;
         }
 
-        userId = newUserData.id;
-      }
+        if (!result.success || !result.user) {
+          alert('Failed to create invitation - no user data returned');
+          return;
+        }
 
-      // Find the role_id for the selected role
-      const roleId = Object.entries(ROLE_MAPPING).find(([id, role]) => role === newUser.role)?.[0];
-      
-      if (!roleId) {
-        alert('Invalid role selected');
-        return;
+        userId = result.user.id;
+        isNewUser = true;
       }
 
       // Add user to company
@@ -338,7 +405,7 @@ export default function AdminPage() {
 
       if (companyUserError) {
         console.error('Error adding user to company:', companyUserError);
-        alert('Failed to add user to company');
+        alert('Failed to add user to company: ' + companyUserError.message);
         return;
       }
 
@@ -347,9 +414,12 @@ export default function AdminPage() {
         id: userId,
         name: newUser.name.trim(),
         email: newUser.email.trim().toLowerCase(),
+        avatar_url: null,
         role: newUser.role,
-        status: 'active' as const,
-        lastLogin: 'Never'
+        status: isNewUser ? 'invited' as const : 'active' as const,
+        lastLogin: isNewUser ? 'Invited' : 'Never',
+        createdAt: 'Today',
+        updatedAt: 'Today'
       };
 
       setUsers([...users, user]);
@@ -358,7 +428,11 @@ export default function AdminPage() {
       setNewUser({ name: '', email: '', role: 'rfi_user' });
       setShowAddUser(false);
       
-      alert(`User ${user.name} added successfully!`);
+      if (isNewUser) {
+        alert(`Invitation sent to ${user.name} (${user.email})!\n\nThey will receive an email with instructions to set up their account and can then log in with full access.`);
+      } else {
+        alert(`User ${user.name} added to your company successfully!`);
+      }
     } catch (error) {
       console.error('Error adding user:', error);
       alert('Failed to add user');
@@ -660,12 +734,18 @@ export default function AdminPage() {
                 </div>
               </div>
 
+              
+
               {/* Users Table */}
               <div className="overflow-x-auto">
                 {usersLoading ? (
                   <div className="flex justify-center items-center py-8">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                     <span className="ml-2 text-gray-600">Loading users...</span>
+                  </div>
+                ) : users.length === 0 ? (
+                  <div className="text-center py-8">
+                    <div className="text-gray-500">No users found in your company.</div>
                   </div>
                 ) : (
                   <table className="min-w-full border border-gray-200 rounded-lg">
@@ -675,6 +755,7 @@ export default function AdminPage() {
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Last Login</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Member Since</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                       </tr>
                     </thead>
@@ -682,9 +763,24 @@ export default function AdminPage() {
                       {users.map((user: any) => (
                       <tr key={user.id} className="hover:bg-gray-50">
                         <td className="px-4 py-3">
-                          <div>
-                            <div className="font-medium text-gray-900">{user.name}</div>
-                            <div className="text-sm text-gray-500">{user.email}</div>
+                          <div className="flex items-center space-x-3">
+                            {user.avatar_url ? (
+                              <img
+                                src={user.avatar_url}
+                                alt={user.name}
+                                className="h-8 w-8 rounded-full object-cover"
+                              />
+                            ) : (
+                              <div className="h-8 w-8 rounded-full bg-gray-300 flex items-center justify-center">
+                                <span className="text-sm font-medium text-gray-600">
+                                  {user.name?.charAt(0)?.toUpperCase() || '?'}
+                                </span>
+                              </div>
+                            )}
+                            <div>
+                              <div className="font-medium text-gray-900">{user.name}</div>
+                              <div className="text-sm text-gray-500">{user.email}</div>
+                            </div>
                           </div>
                         </td>
                         <td className="px-4 py-3">
@@ -705,7 +801,13 @@ export default function AdminPage() {
                             {user.status}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-sm text-gray-500">{user.lastLogin}</td>
+                        <td className="px-4 py-3">
+                          <div className="text-sm text-gray-900">{user.lastLogin}</div>
+                          {user.updatedAt && user.updatedAt !== 'Unknown' && (
+                            <div className="text-xs text-gray-500">Updated: {user.updatedAt}</div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-500">{user.createdAt}</td>
                         <td className="px-4 py-3">
                           <div className="flex space-x-2">
                             <Button
@@ -726,11 +828,11 @@ export default function AdminPage() {
                           </div>
                         </td>
                       </tr>
-                                            ))}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
             </div>
           )}
 

@@ -7,6 +7,45 @@ export type Json =
   | Json[]
 
 export interface Database {
+  auth: {
+    Tables: {
+      users: {
+        Row: {
+          id: string
+          email: string
+          raw_user_meta_data: any
+          created_at: string
+          updated_at: string
+          last_sign_in_at: string | null
+        }
+        Insert: {
+          id?: string
+          email: string
+          raw_user_meta_data?: any
+          created_at?: string
+          updated_at?: string
+          last_sign_in_at?: string | null
+        }
+        Update: {
+          id?: string
+          email?: string
+          raw_user_meta_data?: any
+          created_at?: string
+          updated_at?: string
+          last_sign_in_at?: string | null
+        }
+      }
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      [_ in never]: never
+    }
+    Enums: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       projects: {
@@ -210,6 +249,103 @@ export interface Database {
           message?: string
           is_read?: boolean
           created_at?: string
+        }
+      }
+      users: {
+        Row: {
+          id: string
+          email: string
+          full_name: string | null
+          avatar_url: string | null
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          email: string
+          full_name?: string | null
+          avatar_url?: string | null
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          email?: string
+          full_name?: string | null
+          avatar_url?: string | null
+          updated_at?: string
+        }
+      }
+      companies: {
+        Row: {
+          id: string
+          name: string
+          created_at: string
+          updated_at: string
+          logo_url: string | null
+        }
+        Insert: {
+          id?: string
+          name: string
+          created_at?: string
+          updated_at?: string
+          logo_url?: string | null
+        }
+        Update: {
+          id?: string
+          name?: string
+          created_at?: string
+          updated_at?: string
+          logo_url?: string | null
+        }
+      }
+      company_users: {
+        Row: {
+          user_id: string
+          company_id: string
+          role_id: number
+          created_at: string
+        }
+        Insert: {
+          user_id: string
+          company_id: string
+          role_id: number
+          created_at?: string
+        }
+        Update: {
+          user_id?: string
+          company_id?: string
+          role_id?: number
+          created_at?: string
+        }
+      }
+      roles: {
+        Row: {
+          id: number
+          name: string
+          description: string | null
+        }
+        Insert: {
+          id?: number
+          name: string
+          description?: string | null
+        }
+        Update: {
+          id?: number
+          name?: string
+          description?: string | null
+        }
+      }
+      role_permissions: {
+        Row: {
+          role_id: number
+          permission_id: string
+        }
+        Insert: {
+          role_id: number
+          permission_id: string
+        }
+        Update: {
+          role_id?: number
+          permission_id?: string
         }
       }
     }
