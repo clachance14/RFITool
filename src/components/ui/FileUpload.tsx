@@ -10,6 +10,7 @@ interface FileUploadProps {
   maxFileSize?: number; // in MB
   acceptedFileTypes?: string[];
   placeholder?: string;
+  disabled?: boolean;
 }
 
 interface FileWithId extends File {
@@ -127,7 +128,8 @@ export function FileUpload({
   maxFiles = 10,
   maxFileSize = 50, // 50MB default
   acceptedFileTypes = [],
-  placeholder = "Click to upload files or drag and drop"
+  placeholder = "Click to upload files or drag and drop",
+  disabled = false
 }: FileUploadProps) {
   const [dragActive, setDragActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -278,6 +280,7 @@ export function FileUpload({
   };
 
   const triggerFileSelect = () => {
+    if (disabled) return;
     console.log('triggerFileSelect called, fileInputRef:', fileInputRef.current);
     fileInputRef.current?.click();
   };
@@ -401,27 +404,41 @@ export function FileUpload({
     <div className="space-y-4">
       {/* Upload Area */}
       <div 
-        onClick={triggerFileSelect}
-        onDragEnter={handleDragIn}
-        onDragLeave={handleDragOut}
-        onDragOver={handleDrag}
-        onDrop={handleDrop}
+        onClick={disabled ? undefined : triggerFileSelect}
+        onDragEnter={disabled ? undefined : handleDragIn}
+        onDragLeave={disabled ? undefined : handleDragOut}
+        onDragOver={disabled ? undefined : handleDrag}
+        onDrop={disabled ? undefined : handleDrop}
         className={`
-          border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-all duration-200
-          ${dragActive 
-            ? 'border-blue-500 bg-blue-100 shadow-lg transform scale-105' 
-            : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'
+          border-2 border-dashed rounded-lg p-6 text-center transition-all duration-200
+          ${disabled 
+            ? 'border-gray-200 bg-gray-50 cursor-not-allowed opacity-60' 
+            : dragActive 
+              ? 'border-blue-500 bg-blue-100 shadow-lg transform scale-105 cursor-pointer' 
+              : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50 cursor-pointer'
           }
-          ${files.length >= maxFiles ? 'opacity-50 cursor-not-allowed' : ''}
+          ${files.length >= maxFiles && !disabled ? 'opacity-50 cursor-not-allowed' : ''}
         `}
       >
         <div className={`mb-2 transition-colors duration-200 ${dragActive ? 'text-blue-500' : 'text-gray-400'}`}>
           <Upload className="mx-auto h-8 w-8" />
         </div>
-        <p className={`text-sm mb-2 transition-colors duration-200 ${dragActive ? 'text-blue-700 font-semibold' : 'text-gray-600'}`}>
-          {dragActive ? 'Drop files here!' : placeholder}
+        <p className={`text-sm mb-2 transition-colors duration-200 ${
+          disabled 
+            ? 'text-gray-400' 
+            : dragActive 
+              ? 'text-blue-700 font-semibold' 
+              : 'text-gray-600'
+        }`}>
+          {disabled ? 'File upload disabled' : dragActive ? 'Drop files here!' : placeholder}
         </p>
-        <p className={`text-xs transition-colors duration-200 ${dragActive ? 'text-blue-600' : 'text-gray-500'}`}>
+        <p className={`text-xs transition-colors duration-200 ${
+          disabled 
+            ? 'text-gray-400' 
+            : dragActive 
+              ? 'text-blue-600' 
+              : 'text-gray-500'
+        }`}>
           Maximum {maxFiles} files, up to {maxFileSize}MB each
         </p>
       </div>
@@ -439,7 +456,7 @@ export function FileUpload({
           e.target.value = '';
         }}
         className="hidden"
-        disabled={files.length >= maxFiles}
+        disabled={disabled || files.length >= maxFiles}
       />
 
       {/* Error message */}
@@ -486,8 +503,9 @@ export function FileUpload({
                     <button
                       type="button"
                       onClick={() => removeFile(file.id)}
-                      className="flex-shrink-0 p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
+                      className="flex-shrink-0 p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       title="Remove file"
+                      disabled={disabled}
                     >
                       <X className="w-4 h-4" />
                     </button>

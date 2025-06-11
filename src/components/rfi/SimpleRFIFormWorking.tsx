@@ -12,7 +12,11 @@ import ProjectSelect from '@/components/project/ProjectSelect';
 import { FileUpload } from '@/components/ui/FileUpload';
 import { validateAttachmentFile } from '@/lib/storage';
 
-export function SimpleRFIFormWorking() {
+interface SimpleRFIFormWorkingProps {
+  isReadOnly?: boolean;
+}
+
+export function SimpleRFIFormWorking({ isReadOnly = false }: SimpleRFIFormWorkingProps) {
   const router = useRouter();
   const { getProject, projects } = useProjects();
   const { createRFI, getNextRFINumber } = useRFIs();
@@ -55,7 +59,7 @@ export function SimpleRFIFormWorking() {
   // Load project details when project is selected
   useEffect(() => {
     const loadProjectDetails = async () => {
-      if (selectedProjectId) {
+      if (selectedProjectId && !isReadOnly) {
         try {
           const response = await getProject(selectedProjectId);
           if (response.data) {
@@ -68,31 +72,34 @@ export function SimpleRFIFormWorking() {
       }
     };
     loadProjectDetails();
-  }, [selectedProjectId, getProject, form]);
+  }, [selectedProjectId, getProject, form, isReadOnly]);
 
-  // Auto-save effect
+  // Auto-save effect (disabled for read-only)
   useEffect(() => {
-    if (formValues.subject) {
+    if (formValues.subject && !isReadOnly) {
       localStorage.setItem('working_rfi_draft', JSON.stringify(formValues));
     }
-  }, [formValues]);
+  }, [formValues, isReadOnly]);
 
   // Load next RFI number when project changes
   useEffect(() => {
     const fetchNextRFINumber = async () => {
-      if (selectedProjectId) {
+      if (selectedProjectId && !isReadOnly) {
         try {
           const rfiNumber = await getNextRFINumber(selectedProjectId);
           setNextRFINumber(rfiNumber);
         } catch (error) {
           console.error('Error fetching next RFI number:', error);
         }
+      } else if (isReadOnly && selectedProjectId) {
+        // Show demo RFI number for read-only users
+        setNextRFINumber('RFI-DEMO-001');
       } else {
         setNextRFINumber('');
       }
     };
     fetchNextRFINumber();
-  }, [selectedProjectId, getNextRFINumber]);
+  }, [selectedProjectId, getNextRFINumber, isReadOnly]);
 
   // Initialize with blank form (removed draft loading)
   useEffect(() => {
@@ -122,10 +129,17 @@ export function SimpleRFIFormWorking() {
   }, [form]);
 
   const handleProjectChange = (value: string) => {
-    form.setValue('project_id', value);
+    if (!isReadOnly) {
+      form.setValue('project_id', value);
+    }
   };
 
   const handleClearForm = () => {
+    if (isReadOnly) {
+      setSubmitMessage('Read-only access: Cannot modify form');
+      return;
+    }
+    
     form.reset({
       subject: '',
       reason_for_rfi: '',
@@ -154,6 +168,12 @@ export function SimpleRFIFormWorking() {
   };
 
   const onSubmit = async (data: CreateRFIInput) => {
+    // Prevent submission for read-only users
+    if (isReadOnly) {
+      setSubmitMessage('Read-only access: Cannot create or modify RFIs');
+      return;
+    }
+
     console.log('📋 Form submitted with complete data:', data);
     
     // Debug: Check the current form values directly
@@ -238,6 +258,10 @@ export function SimpleRFIFormWorking() {
 
   const handleCreateRFI = (e: React.MouseEvent) => {
     e.preventDefault();
+    if (isReadOnly) {
+      setSubmitMessage('Read-only access: Cannot create RFIs');
+      return;
+    }
     setSubmitAction('active');
     // Update the form's status field directly
     form.setValue('status', 'active');
@@ -246,6 +270,10 @@ export function SimpleRFIFormWorking() {
 
   const handleSaveAsDraft = (e: React.MouseEvent) => {
     e.preventDefault();
+    if (isReadOnly) {
+      setSubmitMessage('Read-only access: Cannot save RFIs');
+      return;
+    }
     setSubmitAction('draft');
     // Update the form's status field directly
     form.setValue('status', 'draft');
@@ -254,8 +282,27 @@ export function SimpleRFIFormWorking() {
 
   return (
     <div className="max-w-6xl mx-auto p-6">
+      {/* Read-Only Banner */}
+      {isReadOnly && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-amber-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-amber-800">Demo Mode - Read Only Access</h3>
+              <div className="mt-1 text-sm text-amber-700">
+                You can view all RFI form features and fields, but cannot create, edit, or upload files. This is for demonstration purposes only.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold">Create New RFI</h2>
+        <h2 className="text-2xl font-bold">{isReadOnly ? 'RFI Form Demo' : 'Create New RFI'}</h2>
         {nextRFINumber && selectedProjectId && (
           <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2">
             <span className="text-sm text-blue-600 font-medium">Next RFI Number: </span>
@@ -296,6 +343,7 @@ export function SimpleRFIFormWorking() {
                   label="Project"
                   required={true}
                   error={form.formState.errors.project_id?.message}
+                  disabled={isReadOnly}
                 />
               </div>
 
@@ -306,8 +354,9 @@ export function SimpleRFIFormWorking() {
                 <input
                   id="subject"
                   {...form.register('subject')}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className={`w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${isReadOnly ? 'bg-gray-50 cursor-not-allowed' : ''}`}
                   placeholder="Enter subject..."
+                  disabled={isReadOnly}
                 />
                 {form.formState.errors.subject && (
                   <p className="text-red-600 text-sm mt-1">{form.formState.errors.subject.message}</p>
@@ -321,7 +370,8 @@ export function SimpleRFIFormWorking() {
                 <select
                   id="discipline"
                   {...form.register('discipline')}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className={`w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${isReadOnly ? 'bg-gray-50 cursor-not-allowed' : ''}`}
+                  disabled={isReadOnly}
                 >
                   <option value="">Select discipline...</option>
                   <option value="Pipe">Pipe</option>
@@ -341,7 +391,8 @@ export function SimpleRFIFormWorking() {
                 <select
                   id="reason_for_rfi"
                   {...form.register('reason_for_rfi')}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className={`w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${isReadOnly ? 'bg-gray-50 cursor-not-allowed' : ''}`}
+                  disabled={isReadOnly}
                 >
                   <option value="">Select reason...</option>
                   <option value="Design clarification">Design clarification</option>
@@ -375,7 +426,8 @@ export function SimpleRFIFormWorking() {
                 <select
                   id="urgency"
                   {...form.register('urgency')}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className={`w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${isReadOnly ? 'bg-gray-50 cursor-not-allowed' : ''}`}
+                  disabled={isReadOnly}
                 >
                   <option value="non-urgent">Non-Urgent</option>
                   <option value="urgent">Urgent</option>
@@ -395,9 +447,10 @@ export function SimpleRFIFormWorking() {
                 <textarea
                   id="contractor_question"
                   {...form.register('contractor_question')}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className={`w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${isReadOnly ? 'bg-gray-50 cursor-not-allowed' : ''}`}
                   placeholder="Enter the contractor's question..."
                   rows={3}
+                  disabled={isReadOnly}
                 />
                 {form.formState.errors.contractor_question && (
                   <p className="text-red-600 text-sm mt-1">{form.formState.errors.contractor_question.message}</p>
@@ -416,9 +469,10 @@ export function SimpleRFIFormWorking() {
               <textarea
                 id="contractor_proposed_solution"
                 {...form.register('contractor_proposed_solution')}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className={`w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${isReadOnly ? 'bg-gray-50 cursor-not-allowed' : ''}`}
                 placeholder="Describe your proposed solution..."
                 rows={4}
+                disabled={isReadOnly}
               />
             </div>
           </div>
@@ -428,8 +482,13 @@ export function SimpleRFIFormWorking() {
             <button
               type="button"
               onClick={handleClearForm}
-              className="bg-gray-500 text-white px-6 py-3 rounded-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 flex items-center"
-              disabled={isSubmitting}
+              className={`px-6 py-3 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 flex items-center ${
+                isReadOnly 
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                  : 'bg-gray-500 text-white hover:bg-gray-600'
+              }`}
+              disabled={isSubmitting || isReadOnly}
+              title={isReadOnly ? 'Read-only access: Cannot modify form' : 'Clear form'}
             >
               <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -441,8 +500,13 @@ export function SimpleRFIFormWorking() {
               <button
                 type="button"
                 onClick={handleSaveAsDraft}
-                className="bg-gray-600 text-white px-6 py-3 rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
-                disabled={isSubmitting}
+                className={`px-6 py-3 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center ${
+                  isReadOnly 
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                    : 'bg-gray-600 text-white hover:bg-gray-700'
+                }`}
+                disabled={isSubmitting || isReadOnly}
+                title={isReadOnly ? 'Read-only access: Cannot save RFIs' : 'Save as draft'}
               >
                 {isSubmitting && submitAction === 'draft' && (
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
@@ -456,8 +520,13 @@ export function SimpleRFIFormWorking() {
               <button
                 type="button"
                 onClick={handleCreateRFI}
-                className="bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
-                disabled={isSubmitting}
+                className={`px-6 py-3 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center ${
+                  isReadOnly 
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                }`}
+                disabled={isSubmitting || isReadOnly}
+                title={isReadOnly ? 'Read-only access: Cannot create RFIs' : 'Create RFI'}
               >
                 {isSubmitting && submitAction === 'active' && (
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
@@ -500,8 +569,9 @@ export function SimpleRFIFormWorking() {
                 <input
                   id="system"
                   {...form.register('system')}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className={`w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${isReadOnly ? 'bg-gray-50 cursor-not-allowed' : ''}`}
                   placeholder="Enter system..."
+                  disabled={isReadOnly}
                 />
               </div>
 
@@ -512,8 +582,9 @@ export function SimpleRFIFormWorking() {
                 <input
                   id="block_area"
                   {...form.register('block_area')}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className={`w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${isReadOnly ? 'bg-gray-50 cursor-not-allowed' : ''}`}
                   placeholder="Enter block or area..."
+                  disabled={isReadOnly}
                 />
               </div>
 
@@ -524,8 +595,9 @@ export function SimpleRFIFormWorking() {
                 <input
                   id="work_impact"
                   {...form.register('work_impact')}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className={`w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${isReadOnly ? 'bg-gray-50 cursor-not-allowed' : ''}`}
                   placeholder="Describe work impact..."
+                  disabled={isReadOnly}
                 />
               </div>
 
@@ -542,15 +614,18 @@ export function SimpleRFIFormWorking() {
                       value="no"
                       checked={!hasCostImpact}
                       onChange={() => {
-                        setHasCostImpact(false);
-                        // Clear cost fields when "No" is selected
-                        form.setValue('manhours', undefined);
-                        form.setValue('labor_costs', undefined);
-                        form.setValue('material_costs', undefined);
-                        form.setValue('equipment_costs', undefined);
-                        form.setValue('subcontractor_costs', undefined);
+                        if (!isReadOnly) {
+                          setHasCostImpact(false);
+                          // Clear cost fields when "No" is selected
+                          form.setValue('manhours', undefined);
+                          form.setValue('labor_costs', undefined);
+                          form.setValue('material_costs', undefined);
+                          form.setValue('equipment_costs', undefined);
+                          form.setValue('subcontractor_costs', undefined);
+                        }
                       }}
                       className="mr-2 text-blue-600 focus:ring-blue-500"
+                      disabled={isReadOnly}
                     />
                     <span className="text-sm text-gray-700">No</span>
                   </label>
@@ -560,8 +635,13 @@ export function SimpleRFIFormWorking() {
                       name="hasCostImpact"
                       value="yes"
                       checked={hasCostImpact}
-                      onChange={() => setHasCostImpact(true)}
+                      onChange={() => {
+                        if (!isReadOnly) {
+                          setHasCostImpact(true);
+                        }
+                      }}
                       className="mr-2 text-blue-600 focus:ring-blue-500"
+                      disabled={isReadOnly}
                     />
                     <span className="text-sm text-gray-700">Yes</span>
                   </label>
@@ -581,10 +661,11 @@ export function SimpleRFIFormWorking() {
                       type="number"
                       step="0.5"
                       {...form.register('manhours', { valueAsNumber: true })}
-                      className={`w-full border border-gray-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${!hasCostImpact ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                      className={`w-full border border-gray-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${!hasCostImpact || isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                       placeholder="Enter manhours..."
+                      disabled={isReadOnly || !hasCostImpact}
                       onFocus={(e) => {
-                        if (!hasCostImpact) {
+                        if (!hasCostImpact || isReadOnly) {
                           e.target.blur();
                         }
                       }}
@@ -600,10 +681,11 @@ export function SimpleRFIFormWorking() {
                       type="number"
                       step="0.01"
                       {...form.register('labor_costs', { valueAsNumber: true })}
-                      className={`w-full border border-gray-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${!hasCostImpact ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                      className={`w-full border border-gray-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${!hasCostImpact || isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                       placeholder="Enter labor costs..."
+                      disabled={isReadOnly || !hasCostImpact}
                       onFocus={(e) => {
-                        if (!hasCostImpact) {
+                        if (!hasCostImpact || isReadOnly) {
                           e.target.blur();
                         }
                       }}
@@ -619,10 +701,11 @@ export function SimpleRFIFormWorking() {
                       type="number"
                       step="0.01"
                       {...form.register('material_costs', { valueAsNumber: true })}
-                      className={`w-full border border-gray-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${!hasCostImpact ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                      className={`w-full border border-gray-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${!hasCostImpact || isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                       placeholder="Enter material costs..."
+                      disabled={isReadOnly || !hasCostImpact}
                       onFocus={(e) => {
-                        if (!hasCostImpact) {
+                        if (!hasCostImpact || isReadOnly) {
                           e.target.blur();
                         }
                       }}
@@ -638,10 +721,11 @@ export function SimpleRFIFormWorking() {
                       type="number"
                       step="0.01"
                       {...form.register('equipment_costs', { valueAsNumber: true })}
-                      className={`w-full border border-gray-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${!hasCostImpact ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                      className={`w-full border border-gray-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${!hasCostImpact || isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                       placeholder="Enter equipment costs..."
+                      disabled={isReadOnly || !hasCostImpact}
                       onFocus={(e) => {
-                        if (!hasCostImpact) {
+                        if (!hasCostImpact || isReadOnly) {
                           e.target.blur();
                         }
                       }}
@@ -657,10 +741,11 @@ export function SimpleRFIFormWorking() {
                       type="number"
                       step="0.01"
                       {...form.register('subcontractor_costs', { valueAsNumber: true })}
-                      className={`w-full border border-gray-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${!hasCostImpact ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                      className={`w-full border border-gray-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${!hasCostImpact || isReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                       placeholder="Enter subcontractor costs..."
+                      disabled={isReadOnly || !hasCostImpact}
                       onFocus={(e) => {
-                        if (!hasCostImpact) {
+                        if (!hasCostImpact || isReadOnly) {
                           e.target.blur();
                         }
                       }}
@@ -676,9 +761,10 @@ export function SimpleRFIFormWorking() {
                 <textarea
                   id="schedule_impact"
                   {...form.register('schedule_impact')}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className={`w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${isReadOnly ? 'bg-gray-50 cursor-not-allowed' : ''}`}
                   placeholder="Describe schedule impact..."
                   rows={2}
+                  disabled={isReadOnly}
                 />
               </div>
 
@@ -689,8 +775,9 @@ export function SimpleRFIFormWorking() {
                 <input
                   id="test_package"
                   {...form.register('test_package')}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className={`w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${isReadOnly ? 'bg-gray-50 cursor-not-allowed' : ''}`}
                   placeholder="Enter test package..."
+                  disabled={isReadOnly}
                 />
               </div>
 
@@ -701,8 +788,9 @@ export function SimpleRFIFormWorking() {
                 <input
                   id="schedule_id"
                   {...form.register('schedule_id')}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className={`w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${isReadOnly ? 'bg-gray-50 cursor-not-allowed' : ''}`}
                   placeholder="Enter schedule ID..."
+                  disabled={isReadOnly}
                 />
               </div>
             </div>
@@ -714,13 +802,16 @@ export function SimpleRFIFormWorking() {
             <FileUpload
               files={attachments}
               onFilesChange={(newFiles) => {
-                console.log('RFI Form: setAttachments called with:', newFiles);
-                setAttachments(newFiles);
+                if (!isReadOnly) {
+                  console.log('RFI Form: setAttachments called with:', newFiles);
+                  setAttachments(newFiles);
+                }
               }}
               maxFiles={10}
               maxFileSize={50}
               acceptedFileTypes={[]}
-              placeholder="Click to upload files or drag and drop"
+              placeholder={isReadOnly ? "File upload disabled in demo mode" : "Click to upload files or drag and drop"}
+              disabled={isReadOnly}
             />
           </div>
 

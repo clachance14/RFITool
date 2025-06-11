@@ -156,12 +156,14 @@ export default function ProjectsPage() {
             </div>
           )}
           
-          <Link href="/projects/create">
-            <Button className="bg-blue-600 hover:bg-blue-700">
-              <Plus className="w-4 h-4 mr-2" />
-              New Project
-            </Button>
-          </Link>
+          <PermissionGate permission="create_project">
+            <Link href="/projects/create">
+              <Button className="bg-blue-600 hover:bg-blue-700">
+                <Plus className="w-4 h-4 mr-2" />
+                New Project
+              </Button>
+            </Link>
+          </PermissionGate>
         </div>
       </div>
 
@@ -234,12 +236,14 @@ export default function ProjectsPage() {
           <BarChart3 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No projects yet</h3>
           <p className="text-gray-600 mb-6">Get started by creating your first project</p>
-          <Link href="/projects/create">
-            <Button className="bg-blue-600 hover:bg-blue-700">
-              <Plus className="w-4 h-4 mr-2" />
-              Create Your First Project
-            </Button>
-          </Link>
+          <PermissionGate permission="create_project">
+            <Link href="/projects/create">
+              <Button className="bg-blue-600 hover:bg-blue-700">
+                <Plus className="w-4 h-4 mr-2" />
+                Create Your First Project
+              </Button>
+            </Link>
+          </PermissionGate>
         </div>
       ) : viewMode === 'cards' ? (
         /* Card View */
@@ -274,14 +278,16 @@ export default function ProjectsPage() {
                         </div>
                       </DropdownMenuItem>
                     </Link>
-                    <Link href={`/projects/${project.id}/edit`}>
-                      <DropdownMenuItem>
-                        <div className="flex items-center space-x-2">
-                          <Pencil className="w-4 h-4" />
-                          <span>Edit Project</span>
-                        </div>
-                      </DropdownMenuItem>
-                    </Link>
+                    <PermissionGate permission="edit_project">
+                      <Link href={`/projects/${project.id}/edit`}>
+                        <DropdownMenuItem>
+                          <div className="flex items-center space-x-2">
+                            <Pencil className="w-4 h-4" />
+                            <span>Edit Project</span>
+                          </div>
+                        </DropdownMenuItem>
+                      </Link>
+                    </PermissionGate>
                     <Link href={`/rfis/create?project=${project.id}`}>
                       <DropdownMenuItem>
                         <div className="flex items-center space-x-2">
@@ -290,16 +296,18 @@ export default function ProjectsPage() {
                         </div>
                       </DropdownMenuItem>
                     </Link>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      onClick={() => handleDelete(project.id)}
-                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                    >
-                      <div className="flex items-center space-x-2">
-                        <Trash2 className="w-4 h-4" />
-                        <span>Delete Project</span>
-                      </div>
-                    </DropdownMenuItem>
+                    <PermissionGate permission="edit_project">
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={() => handleDelete(project.id)}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      >
+                        <div className="flex items-center space-x-2">
+                          <Trash2 className="w-4 h-4" />
+                          <span>Delete Project</span>
+                        </div>
+                      </DropdownMenuItem>
+                    </PermissionGate>
                   </DropdownMenu>
                 </div>
 
@@ -521,14 +529,16 @@ export default function ProjectsPage() {
                                 </div>
                               </DropdownMenuItem>
                             </Link>
-                            <Link href={`/projects/${project.id}/edit`}>
-                              <DropdownMenuItem>
-                                <div className="flex items-center space-x-2">
-                                  <Pencil className="w-4 h-4" />
-                                  <span>Edit Project</span>
-                                </div>
-                              </DropdownMenuItem>
-                            </Link>
+                            <PermissionGate permission="edit_project">
+                              <Link href={`/projects/${project.id}/edit`}>
+                                <DropdownMenuItem>
+                                  <div className="flex items-center space-x-2">
+                                    <Pencil className="w-4 h-4" />
+                                    <span>Edit Project</span>
+                                  </div>
+                                </DropdownMenuItem>
+                              </Link>
+                            </PermissionGate>
                             <PermissionGate permission="create_rfi">
                               <Link href={`/rfis/create?project=${project.id}`}>
                                 <DropdownMenuItem>
@@ -539,16 +549,18 @@ export default function ProjectsPage() {
                                 </DropdownMenuItem>
                               </Link>
                             </PermissionGate>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              onClick={() => handleDelete(project.id)}
-                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                            >
-                              <div className="flex items-center space-x-2">
-                                <Trash2 className="w-4 h-4" />
-                                <span>Delete Project</span>
-                              </div>
-                            </DropdownMenuItem>
+                            <PermissionGate permission="edit_project">
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() => handleDelete(project.id)}
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              >
+                                <div className="flex items-center space-x-2">
+                                  <Trash2 className="w-4 h-4" />
+                                  <span>Delete Project</span>
+                                </div>
+                              </DropdownMenuItem>
+                            </PermissionGate>
                           </DropdownMenu>
                         </div>
                       </td>

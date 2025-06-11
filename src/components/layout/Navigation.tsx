@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Home, FilePlus, LogOut, FileText, Settings, FolderOpen, TestTube, BarChart3 } from 'lucide-react';
+import { Home, FilePlus, LogOut, FileText, Settings, FolderOpen, BarChart3 } from 'lucide-react';
 import { PermissionGate } from '@/components/PermissionGate';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -84,23 +84,21 @@ export default function Navigation() {
               RFI Log
             </Link>
           </li>
-          <PermissionGate permission="create_rfi">
-            <li>
-              <Link
-                href="/rfis/create"
-                className={`flex items-center px-4 py-3 rounded-lg text-lg font-medium transition-colors ${
-                  pathname === '/rfis/create'
-                    ? 'bg-gray-100 text-blue-600 border-l-4 border-blue-600'
-                    : 'text-gray-700 hover:bg-gray-50'
-                }`}
-                data-testid="nav-create-rfi"
-                aria-current={pathname === '/rfis/create' ? 'page' : undefined}
-              >
-                <FilePlus className="mr-3 h-6 w-6" />
-                Create RFI
-              </Link>
-            </li>
-          </PermissionGate>
+          <li>
+            <Link
+              href="/rfis/create"
+              className={`flex items-center px-4 py-3 rounded-lg text-lg font-medium transition-colors ${
+                pathname === '/rfis/create'
+                  ? 'bg-gray-100 text-blue-600 border-l-4 border-blue-600'
+                  : 'text-gray-700 hover:bg-gray-50'
+              }`}
+              data-testid="nav-create-rfi"
+              aria-current={pathname === '/rfis/create' ? 'page' : undefined}
+            >
+              <FilePlus className="mr-3 h-6 w-6" />
+              Create RFI
+            </Link>
+          </li>
           <li>
             <Link
               href="/reports"
@@ -133,21 +131,6 @@ export default function Navigation() {
               </Link>
             </li>
           </PermissionGate>
-          <li>
-            <Link
-              href="/test-upload"
-              className={`flex items-center px-4 py-3 rounded-lg text-lg font-medium transition-colors ${
-                pathname === '/test-upload'
-                  ? 'bg-gray-100 text-blue-600 border-l-4 border-blue-600'
-                  : 'text-gray-700 hover:bg-gray-50'
-              }`}
-              data-testid="nav-tests"
-              aria-current={pathname === '/test-upload' ? 'page' : undefined}
-            >
-              <TestTube className="mr-3 h-6 w-6" />
-              Tests
-            </Link>
-          </li>
 
         </ul>
         <button
@@ -195,19 +178,17 @@ export default function Navigation() {
           <FileText className="h-6 w-6 mb-1" />
           <span className="text-xs font-medium">RFI Log</span>
         </Link>
-        <PermissionGate permission="create_rfi">
-          <Link
-            href="/rfis/create"
-            className={`flex flex-col items-center justify-center px-2 py-1 rounded transition-colors ${
-              pathname === '/rfis/create' ? 'text-blue-600' : 'text-gray-500 hover:text-blue-600'
-            }`}
-            data-testid="mobile-nav-create-rfi"
-            aria-current={pathname === '/rfis/create' ? 'page' : undefined}
-          >
-            <FilePlus className="h-6 w-6 mb-1" />
-            <span className="text-xs font-medium">Create RFI</span>
-          </Link>
-        </PermissionGate>
+        <Link
+          href="/rfis/create"
+          className={`flex flex-col items-center justify-center px-2 py-1 rounded transition-colors ${
+            pathname === '/rfis/create' ? 'text-blue-600' : 'text-gray-500 hover:text-blue-600'
+          }`}
+          data-testid="mobile-nav-create-rfi"
+          aria-current={pathname === '/rfis/create' ? 'page' : undefined}
+        >
+          <FilePlus className="h-6 w-6 mb-1" />
+          <span className="text-xs font-medium">Create RFI</span>
+        </Link>
         <PermissionGate permission="access_admin">
           <Link
             href="/admin"

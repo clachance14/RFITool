@@ -126,20 +126,18 @@ export default function HomePage() {
 
         {/* Quick Actions */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-          <PermissionGate permission="create_rfi">
-            <Link 
-              href="/rfis/create"
-              className="bg-blue-50 border-2 border-blue-200 rounded-lg p-6 hover:bg-blue-100 transition-colors"
-            >
-              <div className="flex items-center">
-                <Plus className="h-8 w-8 text-blue-600 mr-3" />
-                <div>
-                  <h3 className="text-lg font-semibold text-blue-900">Create New RFI</h3>
-                  <p className="text-blue-700 text-sm">Start a new request for information</p>
-                </div>
+          <Link 
+            href="/rfis/create"
+            className="bg-blue-50 border-2 border-blue-200 rounded-lg p-6 hover:bg-blue-100 transition-colors"
+          >
+            <div className="flex items-center">
+              <Plus className="h-8 w-8 text-blue-600 mr-3" />
+              <div>
+                <h3 className="text-lg font-semibold text-blue-900">Create New RFI</h3>
+                <p className="text-blue-700 text-sm">Start a new request for information</p>
               </div>
-            </Link>
-          </PermissionGate>
+            </div>
+          </Link>
 
           <PermissionGate permission="create_project">
             <Link 
@@ -239,14 +237,12 @@ export default function HomePage() {
                 <div className="text-center py-8">
                   <FileText className="h-12 w-12 text-gray-300 mx-auto mb-3" />
                   <p className="text-gray-500">No active RFIs</p>
-                  <PermissionGate permission="create_rfi">
-                    <Link 
-                      href="/rfis/create"
-                      className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                    >
-                      Create your first RFI
-                    </Link>
-                  </PermissionGate>
+                  <Link 
+                    href="/rfis/create"
+                    className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                  >
+                    Create your first RFI
+                  </Link>
                 </div>
               )}
             </div>

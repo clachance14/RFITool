@@ -15,6 +15,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Plus } from 'lucide-react';
+import { PermissionGate } from '@/components/PermissionGate';
 
 export interface ProjectSelectProps {
   value: string;
@@ -23,6 +24,7 @@ export interface ProjectSelectProps {
   required?: boolean;
   'data-testid'?: string;
   error?: string;
+  disabled?: boolean;
 }
 
 export default function ProjectSelect({
@@ -32,6 +34,7 @@ export default function ProjectSelect({
   required = false,
   'data-testid': testId,
   error,
+  disabled = false,
 }: ProjectSelectProps) {
   const { projects, loading: isLoading, error: errorMessage } = useProjects();
 
@@ -73,8 +76,8 @@ export default function ProjectSelect({
       <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
         {label}
       </label>
-      <Select value={value} onValueChange={onChange} required>
-        <SelectTrigger data-testid="select-trigger">
+      <Select value={value} onValueChange={onChange} required disabled={disabled}>
+        <SelectTrigger data-testid="select-trigger" disabled={disabled}>
           <SelectValue placeholder="Select a project" />
         </SelectTrigger>
         <SelectContent>
@@ -84,14 +87,16 @@ export default function ProjectSelect({
             </SelectItem>
           ))}
           <SelectSeparator />
-          <Link href="/projects/create" className="block">
-            <div className="relative flex w-full cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none hover:bg-accent hover:text-accent-foreground">
-              <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
-                <Plus className="h-4 w-4" />
-              </span>
-              <span>Add New Project</span>
-            </div>
-          </Link>
+          <PermissionGate permission="create_project">
+            <Link href="/projects/create" className="block">
+              <div className="relative flex w-full cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none hover:bg-accent hover:text-accent-foreground">
+                <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
+                  <Plus className="h-4 w-4" />
+                </span>
+                <span>Add New Project</span>
+              </div>
+            </Link>
+          </PermissionGate>
         </SelectContent>
       </Select>
       {error && (

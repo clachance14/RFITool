@@ -48,84 +48,97 @@ async function createDemoData() {
       .select('id')
       .eq('company_id', companyUser.company_id);
     
-    if (existingProjects && existingProjects.length > 0) {
-      console.log('ℹ️ Demo data already exists. Skipping creation.');
+    let createdProjects = existingProjects || [];
+    
+    if (!existingProjects || existingProjects.length === 0) {
+      console.log('📝 Creating sample projects...');
+      
+      // Create sample projects
+      const sampleProjects = [
+        {
+          project_name: 'Downtown Office Complex',
+          contractor_job_number: 'DOC-2024-001',
+          job_contract_number: 'CLIENT-DOC-789',
+          client_company_name: 'Metro Development Corp',
+          company_id: companyUser.company_id,
+          created_by: demoUser.id,
+          project_manager_contact: 'pm@metrodev.com',
+          client_contact_name: 'Sarah Johnson',
+          location: '123 Main Street, Downtown',
+          project_type: 'mechanical',
+          contract_value: 2500000,
+          start_date: '2024-01-15',
+          expected_completion: '2024-12-15',
+          project_description: 'Construction of a 15-story office complex with modern HVAC and electrical systems.',
+          default_urgency: 'non-urgent',
+          standard_recipients: ['pm@metrodev.com', 'engineer@metrodev.com'],
+          project_disciplines: ['HVAC', 'Electrical', 'Plumbing']
+        },
+        {
+          project_name: 'Riverside Residential Tower',
+          contractor_job_number: 'RRT-2024-002',
+          job_contract_number: 'CLIENT-RRT-456',
+          client_company_name: 'Riverside Properties LLC',
+          company_id: companyUser.company_id,
+          created_by: demoUser.id,
+          project_manager_contact: 'manager@riverside.com',
+          client_contact_name: 'Michael Chen',
+          location: '456 River Road, Riverside District',
+          project_type: 'civil',
+          contract_value: 4200000,
+          start_date: '2024-02-01',
+          expected_completion: '2025-06-30',
+          project_description: '25-story residential tower with luxury amenities and underground parking.',
+          default_urgency: 'non-urgent',
+          standard_recipients: ['manager@riverside.com', 'architect@riverside.com'],
+          project_disciplines: ['Structural', 'HVAC', 'Electrical', 'Fire Safety']
+        },
+        {
+          project_name: 'Industrial Warehouse Expansion',
+          contractor_job_number: 'IWE-2024-003',
+          job_contract_number: 'CLIENT-IWE-123',
+          client_company_name: 'LogiCorp Industries',
+          company_id: companyUser.company_id,
+          created_by: demoUser.id,
+          project_manager_contact: 'ops@logicorp.com',
+          client_contact_name: 'David Rodriguez',
+          location: '789 Industrial Blvd, Manufacturing District',
+          project_type: 'ie',
+          contract_value: 1800000,
+          start_date: '2024-03-01',
+          expected_completion: '2024-10-31',
+          project_description: 'Expansion of existing warehouse facility with automated storage systems.',
+          default_urgency: 'urgent',
+          standard_recipients: ['ops@logicorp.com'],
+          project_disciplines: ['Structural', 'Electrical', 'Automation']
+        }
+      ];
+      
+      const { data: newProjects, error: projectError } = await supabase
+        .from('projects')
+        .insert(sampleProjects)
+        .select();
+      
+      if (projectError) throw projectError;
+      
+      createdProjects = newProjects;
+      console.log(`✅ Created ${createdProjects.length} sample projects`);
+    } else {
+      console.log(`ℹ️ Found ${existingProjects.length} existing projects. Using existing projects for RFIs.`);
+    }
+    
+    // Check if RFIs already exist for these projects
+    const { data: existingRFIs } = await supabase
+      .from('rfis')
+      .select('id')
+      .in('project_id', createdProjects.map(p => p.id));
+    
+    if (existingRFIs && existingRFIs.length > 0) {
+      console.log(`ℹ️ Found ${existingRFIs.length} existing RFIs. Skipping RFI creation.`);
       return;
     }
     
-    console.log('📝 Creating sample projects...');
-    
-    // Create sample projects
-    const sampleProjects = [
-      {
-        project_name: 'Downtown Office Complex',
-        contractor_job_number: 'DOC-2024-001',
-        job_contract_number: 'CLIENT-DOC-789',
-        client_company_name: 'Metro Development Corp',
-        company_id: companyUser.company_id,
-        created_by: demoUser.id,
-        project_manager_contact: 'pm@metrodev.com',
-        client_contact_name: 'Sarah Johnson',
-        location: '123 Main Street, Downtown',
-        project_type: 'mechanical',
-        contract_value: 2500000,
-        start_date: '2024-01-15',
-        expected_completion: '2024-12-15',
-        project_description: 'Construction of a 15-story office complex with modern HVAC and electrical systems.',
-        default_urgency: 'non-urgent',
-        standard_recipients: ['pm@metrodev.com', 'engineer@metrodev.com'],
-        project_disciplines: ['HVAC', 'Electrical', 'Plumbing']
-      },
-      {
-        project_name: 'Riverside Residential Tower',
-        contractor_job_number: 'RRT-2024-002',
-        job_contract_number: 'CLIENT-RRT-456',
-        client_company_name: 'Riverside Properties LLC',
-        company_id: companyUser.company_id,
-        created_by: demoUser.id,
-        project_manager_contact: 'manager@riverside.com',
-        client_contact_name: 'Michael Chen',
-        location: '456 River Road, Riverside District',
-        project_type: 'civil',
-        contract_value: 4200000,
-        start_date: '2024-02-01',
-        expected_completion: '2025-06-30',
-        project_description: '25-story residential tower with luxury amenities and underground parking.',
-        default_urgency: 'non-urgent',
-        standard_recipients: ['manager@riverside.com', 'architect@riverside.com'],
-        project_disciplines: ['Structural', 'HVAC', 'Electrical', 'Fire Safety']
-      },
-      {
-        project_name: 'Industrial Warehouse Expansion',
-        contractor_job_number: 'IWE-2024-003',
-        job_contract_number: 'CLIENT-IWE-123',
-        client_company_name: 'LogiCorp Industries',
-        company_id: companyUser.company_id,
-        created_by: demoUser.id,
-        project_manager_contact: 'ops@logicorp.com',
-        client_contact_name: 'David Rodriguez',
-        location: '789 Industrial Blvd, Manufacturing District',
-        project_type: 'ie',
-        contract_value: 1800000,
-        start_date: '2024-03-01',
-        expected_completion: '2024-10-31',
-        project_description: 'Expansion of existing warehouse facility with automated storage systems.',
-        default_urgency: 'urgent',
-        standard_recipients: ['ops@logicorp.com'],
-        project_disciplines: ['Structural', 'Electrical', 'Automation']
-      }
-    ];
-    
-    const { data: createdProjects, error: projectError } = await supabase
-      .from('projects')
-      .insert(sampleProjects)
-      .select();
-    
-    if (projectError) throw projectError;
-    
-    console.log(`✅ Created ${createdProjects.length} sample projects`);
-    
-    console.log('📝 Creating sample RFIs...');
+    console.log('�� Creating sample RFIs...');
     
     // Create sample RFIs for each project
     const sampleRFIs = [
