@@ -342,7 +342,32 @@ export function useRFIs() {
     setLoading(true);
     setError(null);
     try {
-      let query = supabase.from('rfis').select('*');
+      // Get the currently authenticated user's ID
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      
+      if (userError || !user) {
+        throw new Error('User not authenticated');
+      }
+      
+      // Get the user's company_id from the company_users table
+      const { data: companyUserData, error: companyUserError } = await supabase
+        .from('company_users')
+        .select('company_id')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      
+      if (companyUserError || !companyUserData) {
+        throw new Error('Unable to find user company association');
+      }
+
+      // Build query with company filtering through projects table
+      let query = supabase
+        .from('rfis')
+        .select(`
+          *,
+          projects!inner(company_id)
+        `)
+        .eq('projects.company_id', companyUserData.company_id);
       
       if (projectId) {
         query = query.eq('project_id', projectId);
@@ -367,7 +392,7 @@ export function useRFIs() {
             rfi_number: rfiData.rfi_number,
             project_id: rfiData.project_id,
             subject: rfiData.subject,
-            description: rfiData.reason_for_rfi || '',
+            description: rfiData.contractor_question || '',
             status: rfiData.status as any,
             priority: 'medium' as any, // Default priority
             assigned_to: rfiData.assigned_to,
@@ -404,10 +429,33 @@ export function useRFIs() {
     setLoading(true);
     setError(null);
     try {
+      // Get the currently authenticated user's ID
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      
+      if (userError || !user) {
+        throw new Error('User not authenticated');
+      }
+      
+      // Get the user's company_id from the company_users table
+      const { data: companyUserData, error: companyUserError } = await supabase
+        .from('company_users')
+        .select('company_id')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      
+      if (companyUserError || !companyUserData) {
+        throw new Error('Unable to find user company association');
+      }
+
+      // Query the specific RFI with company filtering through projects table
       const { data, error } = await supabase
         .from('rfis')
-        .select('*')
+        .select(`
+          *,
+          projects!inner(company_id)
+        `)
         .eq('id', id)
+        .eq('projects.company_id', companyUserData.company_id)
         .single();
       
       if (error) {
@@ -432,7 +480,7 @@ export function useRFIs() {
         rfi_number: data.rfi_number,
         project_id: data.project_id,
         subject: data.subject,
-        description: data.reason_for_rfi || '',
+        description: data.contractor_question || '',
         status: data.status as any,
         priority: 'medium' as any, // Default priority
         assigned_to: data.assigned_to,

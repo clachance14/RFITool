@@ -2,23 +2,31 @@
 
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { LayoutDashboard, FilePlus, LogOut, FileText, Settings, FolderOpen, TestTube } from 'lucide-react';
+import { Home, FilePlus, LogOut, FileText, Settings, FolderOpen, TestTube, BarChart3 } from 'lucide-react';
+import { PermissionGate } from '@/components/PermissionGate';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function Navigation() {
   const pathname = usePathname();
   const router = useRouter();
+  const { signOut } = useAuth();
 
   const handleLogout = async () => {
     try {
-      // TODO: Add actual logout API call here
-      // For now, just clear any local storage/session data
+      // Use proper Supabase signOut
+      await signOut();
+      
+      // Clear any local storage/session data
       localStorage.removeItem('user');
       sessionStorage.clear();
       
-      // Redirect to login page
+      // Redirect to dedicated login page
       router.push('/login');
     } catch (error) {
-      // TODO: Add proper error handling
+      console.error('Logout error:', error);
+      // Even if signOut fails, clear local data and redirect
+      localStorage.removeItem('user');
+      sessionStorage.clear();
       router.push('/login');
     }
   };
@@ -33,17 +41,17 @@ export default function Navigation() {
         <ul className="flex-1 space-y-2" role="navigation" aria-label="Main navigation">
           <li>
             <Link
-              href="/dashboard"
+              href="/"
               className={`flex items-center px-4 py-3 rounded-lg text-lg font-medium transition-colors ${
-                pathname === '/dashboard'
+                pathname === '/'
                   ? 'bg-gray-100 text-blue-600 border-l-4 border-blue-600'
                   : 'text-gray-700 hover:bg-gray-50'
               }`}
-              data-testid="nav-dashboard"
-              aria-current={pathname === '/dashboard' ? 'page' : undefined}
+              data-testid="nav-home"
+              aria-current={pathname === '/' ? 'page' : undefined}
             >
-              <LayoutDashboard className="mr-3 h-6 w-6" />
-              Dashboard
+              <Home className="mr-3 h-6 w-6" />
+              Home
             </Link>
           </li>
           <li>
@@ -76,36 +84,55 @@ export default function Navigation() {
               RFI Log
             </Link>
           </li>
+          <PermissionGate permission="create_rfi">
+            <li>
+              <Link
+                href="/rfis/create"
+                className={`flex items-center px-4 py-3 rounded-lg text-lg font-medium transition-colors ${
+                  pathname === '/rfis/create'
+                    ? 'bg-gray-100 text-blue-600 border-l-4 border-blue-600'
+                    : 'text-gray-700 hover:bg-gray-50'
+                }`}
+                data-testid="nav-create-rfi"
+                aria-current={pathname === '/rfis/create' ? 'page' : undefined}
+              >
+                <FilePlus className="mr-3 h-6 w-6" />
+                Create RFI
+              </Link>
+            </li>
+          </PermissionGate>
           <li>
             <Link
-              href="/rfis/create"
+              href="/reports"
               className={`flex items-center px-4 py-3 rounded-lg text-lg font-medium transition-colors ${
-                pathname === '/rfis/create'
+                pathname === '/reports'
                   ? 'bg-gray-100 text-blue-600 border-l-4 border-blue-600'
                   : 'text-gray-700 hover:bg-gray-50'
               }`}
-              data-testid="nav-create-rfi"
-              aria-current={pathname === '/rfis/create' ? 'page' : undefined}
+              data-testid="nav-reports"
+              aria-current={pathname === '/reports' ? 'page' : undefined}
             >
-              <FilePlus className="mr-3 h-6 w-6" />
-              Create RFI
+              <BarChart3 className="mr-3 h-6 w-6" />
+              Reports
             </Link>
           </li>
-          <li>
-            <Link
-              href="/admin"
-              className={`flex items-center px-4 py-3 rounded-lg text-lg font-medium transition-colors ${
-                pathname === '/admin'
-                  ? 'bg-gray-100 text-blue-600 border-l-4 border-blue-600'
-                  : 'text-gray-700 hover:bg-gray-50'
-              }`}
-              data-testid="nav-admin"
-              aria-current={pathname === '/admin' ? 'page' : undefined}
-            >
-              <Settings className="mr-3 h-6 w-6" />
-              Admin
-            </Link>
-          </li>
+          <PermissionGate permission="access_admin">
+            <li>
+              <Link
+                href="/admin"
+                className={`flex items-center px-4 py-3 rounded-lg text-lg font-medium transition-colors ${
+                  pathname === '/admin'
+                    ? 'bg-gray-100 text-blue-600 border-l-4 border-blue-600'
+                    : 'text-gray-700 hover:bg-gray-50'
+                }`}
+                data-testid="nav-admin"
+                aria-current={pathname === '/admin' ? 'page' : undefined}
+              >
+                <Settings className="mr-3 h-6 w-6" />
+                Admin
+              </Link>
+            </li>
+          </PermissionGate>
           <li>
             <Link
               href="/test-upload"
@@ -136,15 +163,15 @@ export default function Navigation() {
       {/* Mobile Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 z-50 flex md:hidden bg-white border-t border-gray-200 shadow p-1 justify-around" data-testid="mobile-nav">
         <Link
-          href="/dashboard"
+          href="/"
           className={`flex flex-col items-center justify-center px-2 py-1 rounded transition-colors ${
-            pathname === '/dashboard' ? 'text-blue-600' : 'text-gray-500 hover:text-blue-600'
+            pathname === '/' ? 'text-blue-600' : 'text-gray-500 hover:text-blue-600'
           }`}
-          data-testid="mobile-nav-dashboard"
-          aria-current={pathname === '/dashboard' ? 'page' : undefined}
+          data-testid="mobile-nav-home"
+          aria-current={pathname === '/' ? 'page' : undefined}
         >
-          <LayoutDashboard className="h-6 w-6 mb-1" />
-          <span className="text-xs font-medium">Dashboard</span>
+          <Home className="h-6 w-6 mb-1" />
+          <span className="text-xs font-medium">Home</span>
         </Link>
         <Link
           href="/projects"
@@ -168,39 +195,51 @@ export default function Navigation() {
           <FileText className="h-6 w-6 mb-1" />
           <span className="text-xs font-medium">RFI Log</span>
         </Link>
+        <PermissionGate permission="create_rfi">
+          <Link
+            href="/rfis/create"
+            className={`flex flex-col items-center justify-center px-2 py-1 rounded transition-colors ${
+              pathname === '/rfis/create' ? 'text-blue-600' : 'text-gray-500 hover:text-blue-600'
+            }`}
+            data-testid="mobile-nav-create-rfi"
+            aria-current={pathname === '/rfis/create' ? 'page' : undefined}
+          >
+            <FilePlus className="h-6 w-6 mb-1" />
+            <span className="text-xs font-medium">Create RFI</span>
+          </Link>
+        </PermissionGate>
+        <PermissionGate permission="access_admin">
+          <Link
+            href="/admin"
+            className={`flex flex-col items-center justify-center px-2 py-1 rounded transition-colors ${
+              pathname === '/admin' ? 'text-blue-600' : 'text-gray-500 hover:text-blue-600'
+            }`}
+            data-testid="mobile-nav-admin"
+            aria-current={pathname === '/admin' ? 'page' : undefined}
+          >
+            <Settings className="h-6 w-6 mb-1" />
+            <span className="text-xs font-medium">Admin</span>
+          </Link>
+        </PermissionGate>
         <Link
-          href="/rfis/create"
+          href="/reports"
           className={`flex flex-col items-center justify-center px-2 py-1 rounded transition-colors ${
-            pathname === '/rfis/create' ? 'text-blue-600' : 'text-gray-500 hover:text-blue-600'
+            pathname === '/reports' ? 'text-blue-600' : 'text-gray-500 hover:text-blue-600'
           }`}
-          data-testid="mobile-nav-create-rfi"
-          aria-current={pathname === '/rfis/create' ? 'page' : undefined}
+          data-testid="mobile-nav-reports"
+          aria-current={pathname === '/reports' ? 'page' : undefined}
         >
-          <FilePlus className="h-6 w-6 mb-1" />
-          <span className="text-xs font-medium">Create RFI</span>
+          <BarChart3 className="h-6 w-6 mb-1" />
+          <span className="text-xs font-medium">Reports</span>
         </Link>
-        <Link
-          href="/admin"
-          className={`flex flex-col items-center justify-center px-2 py-1 rounded transition-colors ${
-            pathname === '/admin' ? 'text-blue-600' : 'text-gray-500 hover:text-blue-600'
-          }`}
-          data-testid="mobile-nav-admin"
-          aria-current={pathname === '/admin' ? 'page' : undefined}
+        <button
+          onClick={handleLogout}
+          className="flex flex-col items-center justify-center px-2 py-1 rounded transition-colors text-gray-500 hover:text-red-600"
+          data-testid="mobile-nav-logout"
         >
-          <Settings className="h-6 w-6 mb-1" />
-          <span className="text-xs font-medium">Admin</span>
-        </Link>
-        <Link
-          href="/test-upload"
-          className={`flex flex-col items-center justify-center px-2 py-1 rounded transition-colors ${
-            pathname === '/test-upload' ? 'text-blue-600' : 'text-gray-500 hover:text-blue-600'
-          }`}
-          data-testid="mobile-nav-tests"
-          aria-current={pathname === '/test-upload' ? 'page' : undefined}
-        >
-          <TestTube className="h-6 w-6 mb-1" />
-          <span className="text-xs font-medium">Tests</span>
-        </Link>
+          <LogOut className="h-6 w-6 mb-1" />
+          <span className="text-xs font-medium">Logout</span>
+        </button>
 
       </nav>
     </>

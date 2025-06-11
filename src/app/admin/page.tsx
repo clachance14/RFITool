@@ -2,8 +2,10 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Upload, X, Eye, Settings, Users, Mail, Cog, FileText, Shield, Plus, Edit, Trash2 } from 'lucide-react';
+import { Upload, X, Eye, Settings, Users, Mail, Cog, FileText, Shield, Plus, Edit, Trash2, Download } from 'lucide-react';
 import { AdminProjectSection } from '@/components/project/AdminProjectSection';
+import { ExportSection } from '@/components/admin/ExportSection';
+import { CreateReadOnlyUser } from '@/components/admin/CreateReadOnlyUser';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -27,20 +29,51 @@ const userRoles = {
 export default function AdminPage() {
   const { session } = useAuth();
   const [activeTab, setActiveTab] = useState('branding');
+
+  // Check URL params for tab selection and load localStorage values
+  useEffect(() => {
+    // Only run on client side
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const tab = urlParams.get('tab');
+      if (tab && ['branding', 'users', 'export', 'projects', 'system', 'notifications'].includes(tab)) {
+        setActiveTab(tab);
+      }
+
+      // Load saved values from localStorage
+      const contractorLogo = localStorage.getItem('contractor_logo') || null;
+      const clientLogo = localStorage.getItem('client_logo') || null;
+      const companyName = localStorage.getItem('company_name') || '';
+      const clientName = localStorage.getItem('client_name') || '';
+      
+      setSavedContractorLogo(contractorLogo);
+      setSavedClientLogo(clientLogo);
+      setSavedCompanyName(companyName);
+      setSavedClientName(clientName);
+      
+      setContractorLogo(contractorLogo);
+      setClientLogo(clientLogo);
+      setCompanyName(companyName);
+      setClientName(clientName);
+
+      // Load system settings
+      const rfiFormat = localStorage.getItem('rfi_number_format') || 'RFI-{YYYY}-{####}';
+      const dueDays = parseInt(localStorage.getItem('default_due_days') || '7');
+      const emailNotifs = localStorage.getItem('email_notifications') === 'true';
+      const autoAssign = localStorage.getItem('auto_assign_pm') === 'true';
+      
+      setRfiNumberFormat(rfiFormat);
+      setDefaultDueDays(dueDays);
+      setEmailNotifications(emailNotifs);
+      setAutoAssignPM(autoAssign);
+    }
+  }, []);
   
   // Current saved values
-  const [savedContractorLogo, setSavedContractorLogo] = useState<string | null>(
-    localStorage.getItem('contractor_logo') || null
-  );
-  const [savedClientLogo, setSavedClientLogo] = useState<string | null>(
-    localStorage.getItem('client_logo') || null
-  );
-  const [savedCompanyName, setSavedCompanyName] = useState<string>(
-    localStorage.getItem('company_name') || ''
-  );
-  const [savedClientName, setSavedClientName] = useState<string>(
-    localStorage.getItem('client_name') || ''
-  );
+  const [savedContractorLogo, setSavedContractorLogo] = useState<string | null>(null);
+  const [savedClientLogo, setSavedClientLogo] = useState<string | null>(null);
+  const [savedCompanyName, setSavedCompanyName] = useState<string>('');
+  const [savedClientName, setSavedClientName] = useState<string>('');
 
   // Working values (unsaved changes)
   const [contractorLogo, setContractorLogo] = useState<string | null>(savedContractorLogo);
@@ -173,10 +206,10 @@ export default function AdminPage() {
   }, [session?.user?.id]);
 
   // System settings state
-  const [rfiNumberFormat, setRfiNumberFormat] = useState(localStorage.getItem('rfi_number_format') || 'RFI-{YYYY}-{####}');
-  const [defaultDueDays, setDefaultDueDays] = useState(parseInt(localStorage.getItem('default_due_days') || '7'));
-  const [emailNotifications, setEmailNotifications] = useState(localStorage.getItem('email_notifications') === 'true');
-  const [autoAssignPM, setAutoAssignPM] = useState(localStorage.getItem('auto_assign_pm') === 'true');
+  const [rfiNumberFormat, setRfiNumberFormat] = useState('RFI-{YYYY}-{####}');
+  const [defaultDueDays, setDefaultDueDays] = useState(7);
+  const [emailNotifications, setEmailNotifications] = useState(false);
+  const [autoAssignPM, setAutoAssignPM] = useState(false);
 
   const contractorFileRef = useRef<HTMLInputElement>(null);
   const clientFileRef = useRef<HTMLInputElement>(null);
@@ -447,6 +480,7 @@ export default function AdminPage() {
   const tabs = [
     { id: 'branding', label: 'Branding', icon: Eye },
     { id: 'users', label: 'Users & Permissions', icon: Users },
+    { id: 'export', label: 'Export RFIs', icon: Download },
     { id: 'projects', label: 'Project Settings', icon: FileText },
     { id: 'system', label: 'System Settings', icon: Cog },
     { id: 'notifications', label: 'Notifications', icon: Mail },
@@ -713,10 +747,13 @@ export default function AdminPage() {
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <h2 className="text-xl font-semibold text-gray-900">User Management</h2>
-                <Button onClick={() => setShowAddUser(true)} className="bg-blue-600 hover:bg-blue-700">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add User
-                </Button>
+                <div className="flex space-x-2">
+                  <CreateReadOnlyUser onUserCreated={() => window.location.reload()} />
+                  <Button onClick={() => setShowAddUser(true)} className="bg-blue-600 hover:bg-blue-700">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add User
+                  </Button>
+                </div>
               </div>
 
               {/* User Roles Legend */}
@@ -915,6 +952,11 @@ export default function AdminPage() {
           {/* Project Settings Tab */}
           {activeTab === 'projects' && (
             <AdminProjectSection />
+          )}
+
+          {/* Export Tab */}
+          {activeTab === 'export' && (
+            <ExportSection />
           )}
 
           {/* Notifications Tab */}

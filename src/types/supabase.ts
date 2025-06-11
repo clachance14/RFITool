@@ -93,6 +93,7 @@ export interface Database {
           sub_system: string | null
           schedule_id: string | null
           reason_for_rfi: string
+          contractor_question: string | null
           test_package: string | null
           contractor_proposed_solution: string | null
           associated_reference_documents: string | null
@@ -131,6 +132,7 @@ export interface Database {
           sub_system?: string | null
           schedule_id?: string | null
           reason_for_rfi: string
+          contractor_question?: string | null
           test_package?: string | null
           contractor_proposed_solution?: string | null
           associated_reference_documents?: string | null
@@ -169,6 +171,7 @@ export interface Database {
           sub_system?: string | null
           schedule_id?: string | null
           reason_for_rfi?: string
+          contractor_question?: string | null
           test_package?: string | null
           contractor_proposed_solution?: string | null
           associated_reference_documents?: string | null

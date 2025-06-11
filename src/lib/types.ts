@@ -8,6 +8,7 @@ export interface Project {
   client_company_name: string;
   company_id?: string; // Optional during testing phase
   project_manager_contact: string;
+  client_contact_name: string;
   
   // Project Details
   location?: string;
@@ -30,8 +31,14 @@ export interface Project {
   updated_at: string;
 }
 
-// RFI Status Types
-export type RFIStatus = 'draft' | 'sent' | 'responded' | 'overdue';
+// Enhanced RFI Status Types with edge cases
+export type RFIStatus = 'draft' | 'active' | 'sent' | 'responded' | 'closed' | 'overdue' | 'voided' | 'revised' | 'returned' | 'rejected' | 'superseded';
+
+// RFI Rejection Types
+export type RFIRejectionType = 'internal_review' | 'client_rejected' | 'client_rejected_not_in_scope';
+
+// RFI Status Categories for business logic
+export type RFIStatusCategory = 'active' | 'terminal' | 'transitional';
 
 // RFI Priority Types
 export type RFIPriority = 'low' | 'medium' | 'high';
@@ -64,7 +71,34 @@ export interface RFIAttachment {
   public_url?: string;
 }
 
-// RFI Interface
+// RFI Revision Interface for version tracking
+export interface RFIRevision {
+  id: string;
+  rfi_id: string;
+  revision_number: number;
+  subject: string;
+  description: string;
+  reason_for_rfi: string;
+  contractor_question: string;
+  contractor_proposed_solution?: string;
+  created_by: string;
+  created_at: string;
+  changes_summary?: string;
+}
+
+// RFI Status Log for audit trail
+export interface RFIStatusLog {
+  id: string;
+  rfi_id: string;
+  from_status: RFIStatus;
+  to_status: RFIStatus;
+  changed_by: string;
+  changed_at: string;
+  reason?: string;
+  additional_data?: Record<string, any>;
+}
+
+// Enhanced RFI Interface with revision tracking and edge case fields
 export interface RFI {
   id: string;
   rfi_number: string;
@@ -80,9 +114,45 @@ export interface RFI {
   updated_at: string;
   response: string | null;
   response_date: string | null;
+  
+  // Revision Tracking
+  current_revision?: number;
+  original_rfi_id?: string; // For revisions, points to original
+  
+  // Edge Case Fields
+  superseded_by?: string; // RFI ID that superseded this one
+  superseded_at?: string;
+  rejection_type?: RFIRejectionType;
+  rejection_reason?: string;
+  voided_reason?: string;
+  voided_by?: string;
+  voided_at?: string;
+  
+  // Admin Controls
+  reopened_by?: string;
+  reopened_at?: string;
+  reopened_reason?: string;
+  
+  // Status Tracking
+  date_activated?: string;
+  date_sent?: string;
+  date_responded?: string;
+  date_closed?: string;
+  date_returned?: string;
+  days_overdue?: number;
+  
+  // Secure Links
+  secure_link_token?: string;
+  link_expires_at?: string;
+  
   attachments: string[];
   // Attachment objects with full details
   attachment_files?: RFIAttachment[];
+  // Revision history
+  revisions?: RFIRevision[];
+  // Status change history
+  status_logs?: RFIStatusLog[];
+  
   // Cost Impact Details (legacy fields for compatibility)
   manhours?: number;
   labor_costs?: number;
@@ -91,6 +161,10 @@ export interface RFI {
   subcontractor_costs?: number;
   // Cost Items (new normalized structure)
   cost_items?: RFICostItem[];
+  
+  // Cost Tracking Flags
+  exclude_from_cost_tracking?: boolean; // For VOIDED/SUPERSEDED RFIs
+  cost_tracking_transferred_to?: string; // RFI ID for SUPERSEDED cases
 }
 
 export interface User {
@@ -164,6 +238,11 @@ export interface UpdateRFIInput {
   due_date?: string | null;
   response?: string | null;
   response_date?: string | null;
+  // Edge case fields
+  rejection_type?: RFIRejectionType;
+  rejection_reason?: string;
+  voided_reason?: string;
+  superseded_by?: string;
 }
 
 // API Response Types
@@ -181,6 +260,7 @@ export interface CreateProjectInput {
   client_company_name: string;
   company_id?: string; // Optional during testing phase
   project_manager_contact: string;
+  client_contact_name: string;
   location?: string;
   project_type?: 'mechanical' | 'civil' | 'ie' | 'other';
   contract_value?: number;

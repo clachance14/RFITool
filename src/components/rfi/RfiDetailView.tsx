@@ -3,8 +3,10 @@
 import React, { useState } from 'react';
 import { format } from 'date-fns';
 import { useProjects } from '@/hooks/useProjects';
-import { useRFIs } from '@/contexts/RFIContext';
+import { useRFIs } from '@/hooks/useRFIs';
 import type { RFI, RFIAttachment } from '@/lib/types';
+import { RFIWorkflowControls } from '@/components/rfi/RFIWorkflowControls';
+import { PermissionButton } from '@/components/PermissionButton';
 
 interface RfiDetailViewProps {
   rfi: RFI;
@@ -115,9 +117,10 @@ function AttachmentPreviewModal({ attachment, isOpen, onClose }: AttachmentPrevi
   );
 }
 
-export function RfiDetailView({ rfi }: RfiDetailViewProps) {
+export function RfiDetailView({ rfi: initialRfi }: RfiDetailViewProps) {
   const { projects } = useProjects();
   const { submitResponse } = useRFIs();
+  const [rfi, setRfi] = useState<RFI>(initialRfi);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [responseText, setResponseText] = useState(rfi.response || '');
   const [submittedBy, setSubmittedBy] = useState('');
@@ -125,7 +128,16 @@ export function RfiDetailView({ rfi }: RfiDetailViewProps) {
   const [previewAttachment, setPreviewAttachment] = useState<RFIAttachment | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   
+  // Secure link state
+  const [secureLinkData, setSecureLinkData] = useState<any>(null);
+  const [generatingLink, setGeneratingLink] = useState(false);
+  const [showLinkModal, setShowLinkModal] = useState(false);
+  
   const project = projects.find(p => p.id === rfi.project_id);
+
+  const handleStatusChange = (newStatus: any, updatedRFI: RFI) => {
+    setRfi(updatedRFI);
+  };
 
   const openPreview = (attachment: RFIAttachment) => {
     setPreviewAttachment(attachment);
@@ -164,6 +176,47 @@ export function RfiDetailView({ rfi }: RfiDetailViewProps) {
         });
       }
     }, 1000);
+  };
+
+  // Generate secure link for client access
+  const handleGenerateSecureLink = async () => {
+    try {
+      setGeneratingLink(true);
+      const response = await fetch(`/api/rfis/${rfi.id}/generate-link`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          expirationDays: 30,
+          allowMultipleResponses: false
+        })
+      });
+
+      const result = await response.json();
+      
+      if (!result.success) {
+        alert(result.error || 'Failed to generate secure link');
+        return;
+      }
+
+      setSecureLinkData(result.data);
+      setShowLinkModal(true);
+    } catch (error) {
+      alert('Failed to generate secure link');
+    } finally {
+      setGeneratingLink(false);
+    }
+  };
+
+  const copyLinkToClipboard = () => {
+    if (secureLinkData?.secure_link) {
+      navigator.clipboard.writeText(secureLinkData.secure_link).then(() => {
+        alert('Link copied to clipboard!');
+      }).catch(() => {
+        alert('Failed to copy link');
+      });
+    }
   };
 
   // Helper function to format file size
@@ -760,10 +813,13 @@ export function RfiDetailView({ rfi }: RfiDetailViewProps) {
             {/* Submit Response Button */}
             {(!rfi.response || rfi.status !== 'responded') && (
               <div className="flex justify-end">
-                <button
+                <PermissionButton
+                  permission="respond_to_rfi"
                   onClick={handleSubmitResponse}
                   disabled={!responseText.trim() || isSubmitting}
-                  className="px-6 py-2 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                  variant="default"
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                  title="Submit response to this RFI"
                 >
                   {isSubmitting ? (
                     <>
@@ -776,7 +832,7 @@ export function RfiDetailView({ rfi }: RfiDetailViewProps) {
                   ) : (
                     'Submit Response'
                   )}
-                </button>
+                </PermissionButton>
               </div>
             )}
 
@@ -792,6 +848,11 @@ export function RfiDetailView({ rfi }: RfiDetailViewProps) {
           </div>
         </div>
 
+        {/* Workflow Controls */}
+        <div className="mt-6 print:hidden">
+          <RFIWorkflowControls rfi={rfi} onStatusChange={handleStatusChange} />
+        </div>
+
         {/* Action Buttons */}
         <div className="mt-6 flex justify-center space-x-4 print:hidden">
           <button
@@ -801,26 +862,58 @@ export function RfiDetailView({ rfi }: RfiDetailViewProps) {
             ← Back to RFIs
           </button>
           
-          <button
+          <PermissionButton
+            permission="generate_client_link"
+            onClick={handleGenerateSecureLink}
+            disabled={generatingLink}
+            variant="default"
+            className="bg-purple-600 hover:bg-purple-700 text-white"
+            title="Generate a secure link for client access"
+          >
+            {generatingLink ? (
+              <>
+                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Generating...
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                </svg>
+                Generate Client Link
+              </>
+            )}
+          </PermissionButton>
+          
+          <PermissionButton
+            permission="print_rfi"
             onClick={handlePrintRFI}
-            className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            variant="default"
+            className="bg-blue-600 hover:bg-blue-700 text-white"
+            title="Print the RFI document"
           >
             <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
             </svg>
             Print RFI
-          </button>
+          </PermissionButton>
           
           {rfi.attachment_files && rfi.attachment_files.length > 0 && (
-            <button
+            <PermissionButton
+              permission="print_package"
               onClick={handlePrintWithAttachments}
-              className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+              variant="default"
+              className="bg-green-600 hover:bg-green-700 text-white"
+              title="Print RFI with all attachments"
             >
               <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2-2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
               </svg>
               Print Package ({rfi.attachment_files.length} files)
-            </button>
+            </PermissionButton>
           )}
         </div>
       </div>
@@ -831,6 +924,103 @@ export function RfiDetailView({ rfi }: RfiDetailViewProps) {
         isOpen={isPreviewOpen}
         onClose={closePreview}
       />
+
+      {/* Secure Link Modal */}
+      {showLinkModal && secureLinkData && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">Secure Client Link Generated</h3>
+            </div>
+            
+            <div className="px-6 py-4 space-y-4">
+              <div>
+                <p className="text-sm text-gray-600 mb-3">
+                  Share this secure link with your client to allow them to view and respond to this RFI. 
+                  The link will expire on {format(new Date(secureLinkData.expires_at), 'PPP')}.
+                </p>
+                
+                {rfi.status === 'draft' && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-md p-3 mb-3">
+                    <div className="flex">
+                      <svg className="w-5 h-5 text-amber-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                      </svg>
+                      <div className="text-sm">
+                        <h4 className="font-medium text-amber-800">RFI Status: Draft</h4>
+                        <p className="text-amber-700">This RFI is still in draft status. Consider updating the status to "sent" before sharing with the client.</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                <div className="bg-gray-50 p-3 rounded-md border">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1 mr-3">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Secure Link</label>
+                      <input
+                        type="text"
+                        value={secureLinkData.secure_link}
+                        readOnly
+                        className="w-full px-2 py-1 text-sm bg-white border border-gray-300 rounded"
+                      />
+                    </div>
+                    <button
+                      onClick={copyLinkToClipboard}
+                      className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 flex items-center space-x-1"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                      </svg>
+                      <span>Copy</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
+                <div className="flex">
+                  <svg className="w-5 h-5 text-yellow-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                  <div className="text-sm">
+                    <h4 className="font-medium text-yellow-800">Important Security Notes</h4>
+                    <ul className="mt-1 text-yellow-700 list-disc list-inside space-y-1">
+                      <li>This link is unique and secure - do not share publicly</li>
+                      <li>The link expires automatically after 30 days</li>
+                      <li>Only send this link to authorized client personnel</li>
+                      <li>The client can respond once using this link</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
+                <h4 className="font-medium text-blue-800 mb-2">Email Template</h4>
+                <div className="text-sm text-blue-700">
+                  <p className="mb-2">You can use this template when sending the link to your client:</p>
+                  <div className="bg-white p-3 border rounded text-gray-800 italic">
+                                         "Dear Client,<br/><br/>
+                    Please review and respond to RFI {rfi.rfi_number} - {rfi.subject} using the secure link below:<br/><br/>
+                    {secureLinkData.secure_link}<br/><br/>
+                    This link will expire on {format(new Date(secureLinkData.expires_at), 'PPP')}.<br/><br/>
+                    Best regards"
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="px-6 py-4 border-t border-gray-200 flex justify-end">
+              <button
+                onClick={() => setShowLinkModal(false)}
+                className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
     </>
   );

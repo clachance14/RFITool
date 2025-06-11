@@ -2,12 +2,15 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useRFIs } from '@/hooks/useRFIs';
 import { useProjects } from '@/hooks/useProjects';
 import { Button } from '@/components/ui/button';
-import { Plus, Eye, FileText, AlertCircle } from 'lucide-react';
+import { Plus, Eye, FileText, AlertCircle, Download } from 'lucide-react';
+import { PermissionGate } from '@/components/PermissionGate';
 
 export default function RFIsPage() {
+  const router = useRouter();
   const { rfis, getRFIs, loading, error } = useRFIs();
   const { projects, refetch } = useProjects();
   const [loadingData, setLoadingData] = useState(true);
@@ -50,6 +53,10 @@ export default function RFIsPage() {
     }
   };
 
+  const handleRowClick = (rfiId: string) => {
+    router.push(`/rfis/${rfiId}`);
+  };
+
   if (loadingData || loading) {
     return (
       <div className="p-6">
@@ -79,12 +86,24 @@ export default function RFIsPage() {
           <p className="text-gray-600 mt-1">Manage your Requests for Information</p>
         </div>
         
-        <Link href="/rfis/create">
-          <Button className="bg-blue-600 hover:bg-blue-700">
-            <Plus className="w-4 h-4 mr-2" />
-            New RFI
-          </Button>
-        </Link>
+        <div className="flex items-center space-x-3">
+          {rfis.length > 0 && (
+            <Link href="/admin?tab=export">
+              <Button variant="outline" className="border-green-200 text-green-700 hover:bg-green-50">
+                <Download className="w-4 h-4 mr-2" />
+                Export RFIs
+              </Button>
+            </Link>
+          )}
+          <PermissionGate permission="create_rfi">
+            <Link href="/rfis/create">
+              <Button className="bg-blue-600 hover:bg-blue-700">
+                <Plus className="w-4 h-4 mr-2" />
+                New RFI
+              </Button>
+            </Link>
+          </PermissionGate>
+        </div>
       </div>
 
       {rfis.length === 0 ? (
@@ -92,12 +111,14 @@ export default function RFIsPage() {
           <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No RFIs yet</h3>
           <p className="text-gray-600 mb-6">Get started by creating your first RFI</p>
-          <Link href="/rfis/create">
-            <Button className="bg-blue-600 hover:bg-blue-700">
-              <Plus className="w-4 h-4 mr-2" />
-              Create Your First RFI
-            </Button>
-          </Link>
+          <PermissionGate permission="create_rfi">
+            <Link href="/rfis/create">
+              <Button className="bg-blue-600 hover:bg-blue-700">
+                <Plus className="w-4 h-4 mr-2" />
+                Create Your First RFI
+              </Button>
+            </Link>
+          </PermissionGate>
         </div>
       ) : (
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
@@ -127,7 +148,11 @@ export default function RFIsPage() {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {rfis.map((rfi) => (
-                  <tr key={rfi.id} className="hover:bg-gray-50">
+                  <tr 
+                    key={rfi.id} 
+                    className="hover:bg-gray-50 cursor-pointer transition-colors"
+                    onClick={() => handleRowClick(rfi.id)}
+                  >
                     <td className="px-6 py-4">
                       <div>
                         <div className="text-sm font-medium text-gray-900">
@@ -170,7 +195,7 @@ export default function RFIsPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-right text-sm font-medium">
-                      <Link href={`/rfis/${rfi.id}`}>
+                      <Link href={`/rfis/${rfi.id}`} onClick={(e) => e.stopPropagation()}>
                         <Button variant="outline" size="sm" title="View RFI Details">
                           <Eye className="w-4 h-4" />
                         </Button>

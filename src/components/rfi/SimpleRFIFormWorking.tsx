@@ -17,6 +17,7 @@ export function SimpleRFIFormWorking() {
   const { getProject, projects } = useProjects();
   const { createRFI, getNextRFINumber } = useRFIs();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitAction, setSubmitAction] = useState<'draft' | 'active'>('draft');
   const [submitMessage, setSubmitMessage] = useState<string>('');
   const [nextRFINumber, setNextRFINumber] = useState<string>('');
   const [hasCostImpact, setHasCostImpact] = useState<boolean>(false);
@@ -201,23 +202,28 @@ export function SimpleRFIFormWorking() {
       setIsSubmitting(true);
       setSubmitMessage('');
       
-      // Add attachments to the form data
+      // Add attachments to the form data (status is already set via form.setValue)
       const dataWithAttachments = {
         ...data,
         attachments: attachments
       };
       
+
+      
       const newRFI = await createRFI(dataWithAttachments);
       
-      // Show success message briefly, then navigate to the professional RFI view
-      setSubmitMessage(`RFI created successfully! Redirecting to professional view...`);
+      // Show success message based on action
+      const successMessage = submitAction === 'active' 
+        ? `RFI created and activated successfully! Redirecting to RFI view...`
+        : `RFI saved as draft successfully! Redirecting to RFI view...`;
+      setSubmitMessage(successMessage);
       
       // Clean up form state
       form.reset();
       setAttachments([]);
       localStorage.removeItem('working_rfi_draft');
       
-      // Navigate to the professional RFI detail view after a brief delay
+      // Navigate to view RFI page regardless of action after a brief delay
       setTimeout(() => {
         router.push(`/rfis/${newRFI.id}`);
       }, 1500);
@@ -228,6 +234,22 @@ export function SimpleRFIFormWorking() {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleCreateRFI = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setSubmitAction('active');
+    // Update the form's status field directly
+    form.setValue('status', 'active');
+    form.handleSubmit(onSubmit)();
+  };
+
+  const handleSaveAsDraft = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setSubmitAction('draft');
+    // Update the form's status field directly
+    form.setValue('status', 'draft');
+    form.handleSubmit(onSubmit)();
   };
 
   return (
@@ -415,16 +437,37 @@ export function SimpleRFIFormWorking() {
               Clear RFI Form
             </button>
             
-            <button
-              type="submit"
-              className="bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
-              disabled={isSubmitting}
-            >
-              {isSubmitting && (
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-              )}
-              {isSubmitting ? 'Creating RFI...' : 'Create RFI'}
-            </button>
+            <div className="flex space-x-3">
+              <button
+                type="button"
+                onClick={handleSaveAsDraft}
+                className="bg-gray-600 text-white px-6 py-3 rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                disabled={isSubmitting}
+              >
+                {isSubmitting && submitAction === 'draft' && (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                )}
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+                {isSubmitting && submitAction === 'draft' ? 'Saving Draft...' : 'Save as Draft'}
+              </button>
+              
+              <button
+                type="button"
+                onClick={handleCreateRFI}
+                className="bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                disabled={isSubmitting}
+              >
+                {isSubmitting && submitAction === 'active' && (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                )}
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+                {isSubmitting && submitAction === 'active' ? 'Creating RFI...' : 'Create RFI'}
+              </button>
+            </div>
           </div>
 
           {submitMessage && (

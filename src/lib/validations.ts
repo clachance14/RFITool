@@ -11,7 +11,7 @@ const baseRFISchema = {
   reason_for_rfi: z.string().min(1, 'Reason for RFI is required'),
   contractor_question: z.string().min(1, 'Contractor question is required'),
   project_id: z.string().min(1, 'Project selection is required'),
-  status: z.enum(['draft', 'sent', 'responded', 'overdue'], {
+  status: z.enum(['draft', 'active', 'sent', 'responded', 'closed', 'overdue', 'voided', 'revised', 'returned', 'rejected', 'superseded'], {
     errorMap: () => ({ message: 'Invalid status value' }),
   }),
   urgency: z.enum(['urgent', 'non-urgent'], {
@@ -73,22 +73,39 @@ export const createRFISchema = z.object({
 export const updateRFISchema = z.object({
   subject: optionalTextField,
   description: optionalTextField,
-  status: z.enum(['draft', 'sent', 'responded', 'overdue']).optional(),
+  status: z.enum(['draft', 'active', 'sent', 'responded', 'closed', 'overdue', 'voided', 'revised', 'returned', 'rejected', 'superseded']).optional(),
   priority: z.enum(['low', 'medium', 'high']).optional(),
   assigned_to: z.string().nullable().optional(),
   due_date: z.string().datetime().nullable().optional(),
   response: z.string().nullable().optional(),
   response_date: z.string().datetime().nullable().optional(),
+  // Edge case fields
+  rejection_type: z.enum(['internal_review', 'client_rejected', 'client_rejected_not_in_scope']).optional(),
+  rejection_reason: z.string().max(1000, 'Rejection reason too long').optional(),
+  voided_reason: z.string().max(1000, 'Voided reason too long').optional(),
+  superseded_by: z.string().uuid('Invalid RFI ID format').optional(),
 }).refine(
   (data) => {
     // Additional validation: If status is 'sent', ensure required fields are present
     if (data.status === 'sent') {
       return !!data.description;
     }
+    // If status is voided, ensure voided_reason is provided
+    if (data.status === 'voided') {
+      return !!data.voided_reason;
+    }
+    // If status is rejected, ensure rejection_type and rejection_reason are provided
+    if (data.status === 'rejected') {
+      return !!data.rejection_type && !!data.rejection_reason;
+    }
+    // If status is superseded, ensure superseded_by is provided
+    if (data.status === 'superseded') {
+      return !!data.superseded_by;
+    }
     return true;
   },
   {
-    message: 'Description is required when sending an RFI',
+    message: 'Additional information required for this status change',
     path: ['status'],
   }
 );
@@ -118,6 +135,7 @@ export const createProjectSchema = z.object({
   client_company_name: z.string().min(1, 'Client company is required').max(200),
   company_id: z.string().max(100).optional().or(z.literal('')).transform(val => val === '' ? undefined : val),
   project_manager_contact: z.string().min(1, 'Contact is required'),
+  client_contact_name: z.string().min(1, 'Client contact name is required').max(200),
   
   // Make these truly optional by transforming empty strings to undefined
   location: z.string().optional().or(z.literal('')).transform(val => val === '' ? undefined : val),

@@ -19,9 +19,29 @@ export function useProjects() {
     setLoading(true);
     setError(null);
     try {
+      // Get the currently authenticated user's ID
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      
+      if (userError || !user) {
+        throw new Error('User not authenticated');
+      }
+      
+      // Get the user's company_id from the company_users table
+      const { data: companyUserData, error: companyUserError } = await supabase
+        .from('company_users')
+        .select('company_id')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      
+      if (companyUserError || !companyUserData) {
+        throw new Error('Unable to find user company association');
+      }
+
+      // Query projects filtered by the user's company
       const { data, error } = await supabase
         .from('projects')
-        .select('*');
+        .select('*')
+        .eq('company_id', companyUserData.company_id);
 
       if (error) {
         throw error;
@@ -43,10 +63,30 @@ export function useProjects() {
     setLoading(true);
     setError(null);
     try {
+      // Get the currently authenticated user's ID
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      
+      if (userError || !user) {
+        throw new Error('User not authenticated');
+      }
+      
+      // Get the user's company_id from the company_users table
+      const { data: companyUserData, error: companyUserError } = await supabase
+        .from('company_users')
+        .select('company_id')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      
+      if (companyUserError || !companyUserData) {
+        throw new Error('Unable to find user company association');
+      }
+
+      // Query the specific project, ensuring it belongs to the user's company
       const { data, error } = await supabase
         .from('projects')
         .select('*')
         .eq('id', id)
+        .eq('company_id', companyUserData.company_id)
         .single();
       
       if (error) {
@@ -98,6 +138,7 @@ export function useProjects() {
         company_id: companyUserData.company_id, // Use the retrieved company_id
         created_by: user.id, // Track who created the project
         project_manager_contact: projectData.project_manager_contact || '',
+        client_contact_name: projectData.client_contact_name || '',
         location: projectData.location,
         project_type: projectData.project_type,
         contract_value: projectData.contract_value,

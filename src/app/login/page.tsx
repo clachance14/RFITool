@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { cn } from '@/lib/utils'
 
@@ -8,7 +9,15 @@ export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const { signIn, loading } = useAuth()
+  const { signIn, user, loading } = useAuth()
+  const router = useRouter()
+
+  // Redirect to homepage if already authenticated
+  useEffect(() => {
+    if (user && !loading) {
+      router.replace('/')
+    }
+  }, [user, loading, router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -16,6 +25,9 @@ export default function LoginPage() {
     const { error: signInError } = await signIn(email, password)
     if (signInError) {
       setError(signInError.message)
+    } else {
+      // Successful login - redirect will happen via useEffect when user state updates
+      router.push('/')
     }
   }
 

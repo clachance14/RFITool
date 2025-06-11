@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
+import { getSupabaseAdmin } from '@/lib/supabase';
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,6 +12,9 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Get the admin client safely (only works on server side)
+    const supabaseAdmin = getSupabaseAdmin();
 
     // Send invitation email using Supabase Auth Admin API
     const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(

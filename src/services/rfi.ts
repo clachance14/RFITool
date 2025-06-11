@@ -1,4 +1,4 @@
-import { RFI, RFIStatus } from "@/types/rfi";
+import { RFI, RFIStatus } from "@/lib/types";
 import { api } from "@/lib/api";
 
 export const updateRFIStatus = async (rfiId: string, status: RFIStatus): Promise<RFI> => {

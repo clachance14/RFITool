@@ -39,7 +39,8 @@ CREATE TABLE projects (
   project_name VARCHAR(255) NOT NULL,
   job_contract_number VARCHAR(100) NOT NULL,
   client_company_name VARCHAR(255) NOT NULL,
-  project_manager_contact VARCHAR(255) NOT NULL,
+  project_manager_contact VARCHAR(255) NOT NULL, -- Client email
+  client_contact_name VARCHAR(255) NOT NULL, -- Client contact person name
   
   -- Project Details  
   location VARCHAR(500),

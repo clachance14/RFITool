@@ -3,11 +3,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { format } from 'date-fns';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useRFIs } from '@/hooks/useRFIs';
 import { useProjects } from '@/hooks/useProjects';
 import type { RFI, RFIStatus } from '@/lib/types';
 
 export function RFILog() {
+  const router = useRouter();
   const { rfis, getRFIs, loading } = useRFIs();
   const { projects, refetch } = useProjects();
   const [sortField, setSortField] = useState<keyof RFI>('created_at');
@@ -35,10 +37,14 @@ export function RFILog() {
     switch (status) {
       case 'draft':
         return 'bg-gray-100 text-gray-800';
-      case 'sent':
+      case 'active':
         return 'bg-blue-100 text-blue-800';
+      case 'sent':
+        return 'bg-purple-100 text-purple-800';
       case 'responded':
         return 'bg-green-100 text-green-800';
+      case 'closed':
+        return 'bg-gray-100 text-gray-800';
       case 'overdue':
         return 'bg-red-100 text-red-800';
       default:
@@ -87,6 +93,10 @@ export function RFILog() {
       setSortField(field);
       setSortDirection('asc');
     }
+  };
+
+  const handleRowClick = (rfiId: string) => {
+    router.push(`/rfis/${rfiId}`);
   };
 
   const filteredAndSortedRFIs = useMemo(() => {
@@ -188,22 +198,26 @@ export function RFILog() {
 
         {/* Summary Stats */}
         {rfis.length > 0 && (
-          <div className="mb-8 grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="mb-8 grid grid-cols-2 lg:grid-cols-5 gap-4">
             <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
               <div className="text-2xl font-bold text-gray-900">{rfis.length}</div>
               <div className="text-sm text-gray-600">Total RFIs</div>
             </div>
             <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
-              <div className="text-2xl font-bold text-blue-600">{rfis.filter(r => r.status === 'sent').length}</div>
+              <div className="text-2xl font-bold text-gray-600">{rfis.filter(r => r.status === 'draft').length}</div>
+              <div className="text-sm text-gray-600">Draft</div>
+            </div>
+            <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+              <div className="text-2xl font-bold text-blue-600">{rfis.filter(r => r.status === 'active').length}</div>
+              <div className="text-sm text-gray-600">Active</div>
+            </div>
+            <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+              <div className="text-2xl font-bold text-purple-600">{rfis.filter(r => r.status === 'sent').length}</div>
               <div className="text-sm text-gray-600">Sent</div>
             </div>
             <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
               <div className="text-2xl font-bold text-green-600">{rfis.filter(r => r.status === 'responded').length}</div>
               <div className="text-sm text-gray-600">Responded</div>
-            </div>
-            <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
-              <div className="text-2xl font-bold text-red-600">{rfis.filter(r => r.status === 'overdue').length}</div>
-              <div className="text-sm text-gray-600">Overdue</div>
             </div>
           </div>
         )}
@@ -246,8 +260,10 @@ export function RFILog() {
               >
                 <option value="all">All Statuses</option>
                 <option value="draft">Draft</option>
+                <option value="active">Active</option>
                 <option value="sent">Sent</option>
                 <option value="responded">Responded</option>
+                <option value="closed">Closed</option>
                 <option value="overdue">Overdue</option>
               </select>
             </div>
@@ -376,7 +392,11 @@ export function RFILog() {
                   </tr>
                 ) : (
                   filteredAndSortedRFIs.map((rfi) => (
-                    <tr key={rfi.id} className="hover:bg-gray-50">
+                    <tr 
+                      key={rfi.id} 
+                      className="hover:bg-gray-50 cursor-pointer transition-colors"
+                      onClick={() => handleRowClick(rfi.id)}
+                    >
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900">{rfi.rfi_number}</div>
                       </td>
@@ -427,6 +447,7 @@ export function RFILog() {
                         <Link 
                           href={`/rfis/${rfi.id}`}
                           className="text-blue-600 hover:text-blue-900 font-medium"
+                          onClick={(e) => e.stopPropagation()}
                         >
                           View
                         </Link>

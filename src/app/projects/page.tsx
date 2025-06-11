@@ -6,7 +6,9 @@ import { Project } from '@/lib/types';
 import { useProjects } from '@/hooks/useProjects';
 import { useRFIs } from '@/hooks/useRFIs';
 import { Button } from '@/components/ui/button';
-import { Plus, Pencil, Trash2, FileText, Calendar, Users, BarChart3, Eye, Grid3X3, List } from 'lucide-react';
+import { Plus, Pencil, Trash2, FileText, Calendar, Users, BarChart3, Eye, Grid3X3, List, MoreVertical } from 'lucide-react';
+import { DropdownMenu, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
+import { PermissionGate } from '@/components/PermissionGate';
 
 // Project statistics interface
 interface ProjectStats {
@@ -257,22 +259,48 @@ export default function ProjectsPage() {
                       <div>Client Contract: #{project.job_contract_number}</div>
                     </div>
                   </div>
-                  <div className="flex space-x-2">
-                    <Link href={`/projects/${project.id}/edit`}>
-                      <Button variant="outline" size="sm" title="Edit Project">
-                        <Pencil className="w-4 h-4" />
+                  <DropdownMenu
+                    trigger={
+                      <Button variant="outline" size="sm" title="Project Options">
+                        <MoreVertical className="w-4 h-4" />
                       </Button>
+                    }
+                  >
+                    <Link href={`/projects/${project.id}`}>
+                      <DropdownMenuItem>
+                        <div className="flex items-center space-x-2">
+                          <Eye className="w-4 h-4" />
+                          <span>View Details</span>
+                        </div>
+                      </DropdownMenuItem>
                     </Link>
-                    <Button
-                      variant="outline" 
-                      size="sm"
+                    <Link href={`/projects/${project.id}/edit`}>
+                      <DropdownMenuItem>
+                        <div className="flex items-center space-x-2">
+                          <Pencil className="w-4 h-4" />
+                          <span>Edit Project</span>
+                        </div>
+                      </DropdownMenuItem>
+                    </Link>
+                    <Link href={`/rfis/create?project=${project.id}`}>
+                      <DropdownMenuItem>
+                        <div className="flex items-center space-x-2">
+                          <Plus className="w-4 h-4" />
+                          <span>New RFI</span>
+                        </div>
+                      </DropdownMenuItem>
+                    </Link>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
                       onClick={() => handleDelete(project.id)}
                       className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                      title="Delete Project"
                     >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
+                      <div className="flex items-center space-x-2">
+                        <Trash2 className="w-4 h-4" />
+                        <span>Delete Project</span>
+                      </div>
+                    </DropdownMenuItem>
+                  </DropdownMenu>
                 </div>
 
                 {/* Project Details */}
@@ -360,12 +388,14 @@ export default function ProjectsPage() {
                         View Details
                       </Button>
                     </Link>
-                    <Link href={`/rfis/create?project=${project.id}`} className="flex-1">
-                      <Button className="w-full bg-blue-600 hover:bg-blue-700" title="Create New RFI for this Project">
-                        <Plus className="w-4 h-4 mr-2" />
-                        New RFI
-                      </Button>
-                    </Link>
+                    <PermissionGate permission="create_rfi">
+                      <Link href={`/rfis/create?project=${project.id}`} className="flex-1">
+                        <Button className="w-full bg-blue-600 hover:bg-blue-700" title="Create New RFI for this Project">
+                          <Plus className="w-4 h-4 mr-2" />
+                          New RFI
+                        </Button>
+                      </Link>
+                    </PermissionGate>
                   </div>
                 </div>
               </div>
@@ -475,31 +505,51 @@ export default function ProjectsPage() {
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <div className="flex justify-end space-x-2">
-                          <Link href={`/projects/${project.id}`}>
-                            <Button variant="outline" size="sm" title="View Project Details">
-                              <Eye className="w-4 h-4" />
-                            </Button>
-                          </Link>
-                          <Link href={`/projects/${project.id}/edit`}>
-                            <Button variant="outline" size="sm" title="Edit Project">
-                              <Pencil className="w-4 h-4" />
-                            </Button>
-                          </Link>
-                          <Link href={`/rfis/create?project=${project.id}`}>
-                            <Button size="sm" className="bg-blue-600 hover:bg-blue-700" title="Create New RFI for this Project">
-                              <Plus className="w-4 h-4" />
-                            </Button>
-                          </Link>
-                          <Button
-                            variant="outline" 
-                            size="sm"
-                            onClick={() => handleDelete(project.id)}
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                            title="Delete Project"
+                        <div className="flex justify-end">
+                          <DropdownMenu
+                            trigger={
+                              <Button variant="outline" size="sm" title="Project Options">
+                                <MoreVertical className="w-4 h-4" />
+                              </Button>
+                            }
                           >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
+                            <Link href={`/projects/${project.id}`}>
+                              <DropdownMenuItem>
+                                <div className="flex items-center space-x-2">
+                                  <Eye className="w-4 h-4" />
+                                  <span>View Details</span>
+                                </div>
+                              </DropdownMenuItem>
+                            </Link>
+                            <Link href={`/projects/${project.id}/edit`}>
+                              <DropdownMenuItem>
+                                <div className="flex items-center space-x-2">
+                                  <Pencil className="w-4 h-4" />
+                                  <span>Edit Project</span>
+                                </div>
+                              </DropdownMenuItem>
+                            </Link>
+                            <PermissionGate permission="create_rfi">
+                              <Link href={`/rfis/create?project=${project.id}`}>
+                                <DropdownMenuItem>
+                                  <div className="flex items-center space-x-2">
+                                    <Plus className="w-4 h-4" />
+                                    <span>New RFI</span>
+                                  </div>
+                                </DropdownMenuItem>
+                              </Link>
+                            </PermissionGate>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => handleDelete(project.id)}
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            >
+                              <div className="flex items-center space-x-2">
+                                <Trash2 className="w-4 h-4" />
+                                <span>Delete Project</span>
+                              </div>
+                            </DropdownMenuItem>
+                          </DropdownMenu>
                         </div>
                       </td>
                     </tr>

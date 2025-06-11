@@ -32,6 +32,7 @@ export function ProjectFormWithLogos({
     client_company_name: initialData?.client_company_name || '',
     company_id: initialData?.company_id || '',
     project_manager_contact: initialData?.project_manager_contact || '',
+    client_contact_name: initialData?.client_contact_name || '',
     location: initialData?.location || '',
     project_type: initialData?.project_type || undefined,
     contract_value: initialData?.contract_value || undefined,
@@ -146,14 +147,25 @@ export function ProjectFormWithLogos({
           </div>
 
           <div>
-            <Label htmlFor="project_manager_contact">Project Manager Contact *</Label>
+            <Label htmlFor="project_manager_contact">Client Email *</Label>
             <Input
               id="project_manager_contact"
               type="email"
               value={formData.project_manager_contact}
               onChange={(e) => handleChange('project_manager_contact', e.target.value)}
               required
-              placeholder="manager@example.com"
+              placeholder="client.manager@example.com"
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="client_contact_name">Client Contact Name *</Label>
+            <Input
+              id="client_contact_name"
+              value={formData.client_contact_name}
+              onChange={(e) => handleChange('client_contact_name', e.target.value)}
+              required
+              placeholder="Enter client contact name"
             />
           </div>
 

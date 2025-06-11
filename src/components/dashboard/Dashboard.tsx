@@ -1,14 +1,19 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useProjects } from '@/hooks/useProjects';
-import { useRFIs } from '@/contexts/RFIContext';
+import { useRFIs } from '@/hooks/useRFIs';
 import { format, startOfWeek, endOfWeek } from 'date-fns';
 
 export function Dashboard() {
   const { projects } = useProjects();
-  const { rfis } = useRFIs();
-  const [selectedProjectId, setSelectedProjectId] = useState(projects[0]?.id || '');
+  const { rfis, getRFIs, loading } = useRFIs();
+
+  // Fetch RFIs when component mounts
+  useEffect(() => {
+    getRFIs();
+  }, [getRFIs]);
+  const [selectedProjectId, setSelectedProjectId] = useState('');
 
   const selectedProject = useMemo(() => projects.find(p => p.id === selectedProjectId), [projects, selectedProjectId]);
   const projectRFIs = useMemo(() => rfis.filter(rfi => rfi.project_id === selectedProjectId), [rfis, selectedProjectId]);
@@ -21,7 +26,11 @@ export function Dashboard() {
 
   // Weekly stats
   const totalRFIs = projectRFIs.length;
-  const openRFIs = projectRFIs.filter(rfi => rfi.status === 'draft' || rfi.status === 'sent').length;
+  const openRFIs = projectRFIs.filter(rfi => 
+    rfi.status === 'draft' || 
+    rfi.status === 'active' || 
+    rfi.status === 'sent'
+  ).length;
   const overdueRFIs = projectRFIs.filter(rfi => rfi.status === 'overdue').length;
   const newRFIsThisWeek = projectRFIs.filter(rfi => {
     const created = new Date(rfi.created_at);
@@ -38,6 +47,16 @@ export function Dashboard() {
   // Recent RFI History (last 10)
   const recentRFIs = [...projectRFIs].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 10);
 
+  if (loading) {
+    return (
+      <div className="bg-white p-8 rounded-lg shadow max-w-5xl mx-auto print:bg-white print:shadow-none print:p-4">
+        <div className="flex items-center justify-center py-12">
+          <div className="text-gray-500">Loading RFI data...</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-white p-8 rounded-lg shadow max-w-5xl mx-auto print:bg-white print:shadow-none print:p-4">
       {/* Project Selector */}
@@ -49,6 +68,7 @@ export function Dashboard() {
           value={selectedProjectId}
           onChange={e => setSelectedProjectId(e.target.value)}
         >
+          <option value="">Select a project</option>
           {projects.map(project => (
             <option key={project.id} value={project.id}>{project.project_name}</option>
           ))}
@@ -60,7 +80,7 @@ export function Dashboard() {
         {/* Contractor Logo */}
         <div className="w-32 h-16 flex items-center justify-center rounded print:border print:border-gray-400">
           {(() => {
-            const contractorLogo = localStorage.getItem('contractor_logo');
+            const contractorLogo = typeof window !== 'undefined' ? localStorage.getItem('contractor_logo') : null;
             return contractorLogo ? (
               <img
                 src={contractorLogo}
@@ -82,7 +102,7 @@ export function Dashboard() {
         {/* Client Logo */}
         <div className="w-32 h-16 flex items-center justify-center rounded print:border print:border-gray-400">
           {(() => {
-            const clientLogo = localStorage.getItem('client_logo');
+            const clientLogo = typeof window !== 'undefined' ? localStorage.getItem('client_logo') : null;
             return clientLogo ? (
               <img
                 src={clientLogo}
@@ -114,40 +134,60 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* Weekly Summary Section */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8 print:mb-4">
-        <SummaryCard label="Total RFIs" value={totalRFIs} />
-        <SummaryCard label="Open RFIs" value={openRFIs} />
-        <SummaryCard label="Overdue RFIs" value={overdueRFIs} />
-        <SummaryCard label="New RFIs This Week" value={newRFIsThisWeek} />
-        <SummaryCard label="Responded RFIs This Week" value={respondedRFIsThisWeek} />
-      </div>
-
-      {/* Detailed Status Section */}
-      <div className="mb-8 print:mb-4">
-        <h2 className="text-lg font-bold mb-2">Overdue RFIs</h2>
-        <RfiTable rfis={overdueRFIsList} emptyMessage="No overdue RFIs." />
-      </div>
-      <div className="mb-8 print:mb-4">
-        <h2 className="text-lg font-bold mb-2">Recent RFI History (Last 10)</h2>
-        <RfiTable rfis={recentRFIs} emptyMessage="No recent RFIs." />
-      </div>
-
-      {/* Visualizations Section */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 print:gap-4">
-        <div className="bg-gray-50 rounded p-4 border flex flex-col items-center print:border-gray-300">
-          <h3 className="font-semibold mb-2">Open RFIs by Status</h3>
-          <div className="w-40 h-40 flex items-center justify-center bg-gray-200 rounded-full">
-            <span className="text-gray-500 text-xs">[Pie Chart Placeholder]</span>
+      {!selectedProjectId ? (
+        /* No Project Selected Message */
+        <div className="text-center py-16 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+          <div className="max-w-md mx-auto">
+            <svg className="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-4m-5 0H3m2 0h3M9 7h6m-6 4h6m-6 4h6" />
+            </svg>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Please Select a Project</h3>
+            <p className="text-gray-600 mb-4">
+              Choose a project from the dropdown above to view RFI status reports, statistics, and project details.
+            </p>
+            <p className="text-sm text-gray-500">
+              RFI data will appear here once you make a selection.
+            </p>
           </div>
         </div>
-        <div className="bg-gray-50 rounded p-4 border flex flex-col items-center print:border-gray-300">
-          <h3 className="font-semibold mb-2">RFI Activity This Week</h3>
-          <div className="w-full h-40 flex items-center justify-center bg-gray-200 rounded">
-            <span className="text-gray-500 text-xs">[Bar Chart Placeholder]</span>
+      ) : (
+        <>
+          {/* Weekly Summary Section */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8 print:mb-4">
+            <SummaryCard label="Total RFIs" value={totalRFIs} />
+            <SummaryCard label="Open RFIs" value={openRFIs} />
+            <SummaryCard label="Overdue RFIs" value={overdueRFIs} />
+            <SummaryCard label="New RFIs This Week" value={newRFIsThisWeek} />
+            <SummaryCard label="Responded RFIs This Week" value={respondedRFIsThisWeek} />
           </div>
-        </div>
-      </div>
+
+          {/* Detailed Status Section */}
+          <div className="mb-8 print:mb-4">
+            <h2 className="text-lg font-bold mb-2">Overdue RFIs</h2>
+            <RfiTable rfis={overdueRFIsList} emptyMessage="No overdue RFIs." />
+          </div>
+          <div className="mb-8 print:mb-4">
+            <h2 className="text-lg font-bold mb-2">Recent RFI History (Last 10)</h2>
+            <RfiTable rfis={recentRFIs} emptyMessage="No recent RFIs." />
+          </div>
+
+          {/* Visualizations Section */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 print:gap-4">
+            <div className="bg-gray-50 rounded p-4 border flex flex-col items-center print:border-gray-300">
+              <h3 className="font-semibold mb-2">Open RFIs by Status</h3>
+              <div className="w-40 h-40 flex items-center justify-center bg-gray-200 rounded-full">
+                <span className="text-gray-500 text-xs">[Pie Chart Placeholder]</span>
+              </div>
+            </div>
+            <div className="bg-gray-50 rounded p-4 border flex flex-col items-center print:border-gray-300">
+              <h3 className="font-semibold mb-2">RFI Activity This Week</h3>
+              <div className="w-full h-40 flex items-center justify-center bg-gray-200 rounded">
+                <span className="text-gray-500 text-xs">[Bar Chart Placeholder]</span>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
