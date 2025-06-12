@@ -255,7 +255,7 @@ export default function ProjectsPage() {
               <div key={project.id} className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-lg transition-shadow">
                 {/* Project Header */}
                 <div className="flex justify-between items-start mb-4">
-                  <div className="flex-1">
+                  <div className="flex-1 pr-4">
                     <h3 className="text-lg font-semibold text-gray-900 mb-1">{project.project_name}</h3>
                     <p className="text-sm text-gray-600">{project.client_company_name}</p>
                     <div className="text-xs text-gray-500 mt-1 space-y-1">
@@ -263,52 +263,69 @@ export default function ProjectsPage() {
                       <div>Client Contract: #{project.job_contract_number}</div>
                     </div>
                   </div>
-                  <DropdownMenu
-                    trigger={
-                      <Button variant="outline" size="sm" title="Project Options">
-                        <MoreVertical className="w-4 h-4" />
-                      </Button>
-                    }
-                  >
-                    <Link href={`/projects/${project.id}`}>
-                      <DropdownMenuItem>
-                        <div className="flex items-center space-x-2">
-                          <Eye className="w-4 h-4" />
-                          <span>View Details</span>
-                        </div>
-                      </DropdownMenuItem>
-                    </Link>
-                    <PermissionGate permission="edit_project">
-                      <Link href={`/projects/${project.id}/edit`}>
+                  <div className="flex items-start space-x-3">
+                    {/* Client Logo */}
+                    {project.client_logo_url && (
+                      <div className="flex-shrink-0">
+                        <img
+                          src={project.client_logo_url}
+                          alt={`${project.client_company_name} Logo`}
+                          className="h-10 w-auto object-contain rounded border border-gray-200 bg-white p-1"
+                          onError={(e) => {
+                            // Hide the image if it fails to load
+                            e.currentTarget.style.display = 'none';
+                          }}
+                        />
+                      </div>
+                    )}
+                    {/* Options Dropdown */}
+                    <DropdownMenu
+                      trigger={
+                        <Button variant="outline" size="sm" title="Project Options">
+                          <MoreVertical className="w-4 h-4" />
+                        </Button>
+                      }
+                    >
+                      <Link href={`/projects/${project.id}`}>
                         <DropdownMenuItem>
                           <div className="flex items-center space-x-2">
-                            <Pencil className="w-4 h-4" />
-                            <span>Edit Project</span>
+                            <Eye className="w-4 h-4" />
+                            <span>View Details</span>
                           </div>
                         </DropdownMenuItem>
                       </Link>
-                    </PermissionGate>
-                    <Link href={`/rfis/create?project=${project.id}`}>
-                      <DropdownMenuItem>
-                        <div className="flex items-center space-x-2">
-                          <Plus className="w-4 h-4" />
-                          <span>New RFI</span>
-                        </div>
-                      </DropdownMenuItem>
-                    </Link>
-                    <PermissionGate permission="edit_project">
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        onClick={() => handleDelete(project.id)}
-                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                      >
-                        <div className="flex items-center space-x-2">
-                          <Trash2 className="w-4 h-4" />
-                          <span>Delete Project</span>
-                        </div>
-                      </DropdownMenuItem>
-                    </PermissionGate>
-                  </DropdownMenu>
+                      <PermissionGate permission="edit_project">
+                        <Link href={`/projects/${project.id}/edit`}>
+                          <DropdownMenuItem>
+                            <div className="flex items-center space-x-2">
+                              <Pencil className="w-4 h-4" />
+                              <span>Edit Project</span>
+                            </div>
+                          </DropdownMenuItem>
+                        </Link>
+                      </PermissionGate>
+                      <Link href={`/rfis/create?project=${project.id}`}>
+                        <DropdownMenuItem>
+                          <div className="flex items-center space-x-2">
+                            <Plus className="w-4 h-4" />
+                            <span>New RFI</span>
+                          </div>
+                        </DropdownMenuItem>
+                      </Link>
+                      <PermissionGate permission="edit_project">
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={() => handleDelete(project.id)}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <div className="flex items-center space-x-2">
+                            <Trash2 className="w-4 h-4" />
+                            <span>Delete Project</span>
+                          </div>
+                        </DropdownMenuItem>
+                      </PermissionGate>
+                    </DropdownMenu>
+                  </div>
                 </div>
 
                 {/* Project Details */}

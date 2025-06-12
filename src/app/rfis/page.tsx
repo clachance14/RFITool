@@ -6,8 +6,23 @@ import { useRouter } from 'next/navigation';
 import { useRFIs } from '@/hooks/useRFIs';
 import { useProjects } from '@/hooks/useProjects';
 import { Button } from '@/components/ui/button';
-import { Plus, Eye, FileText, AlertCircle, Download } from 'lucide-react';
+import { Plus, Eye, FileText, AlertCircle, Download, Clock, User, MessageSquare, Send, CheckCircle } from 'lucide-react';
 import { PermissionGate } from '@/components/PermissionGate';
+import { format, isToday, isYesterday, isThisWeek } from 'date-fns';
+
+// Activity types for RFI timeline
+interface RFIActivity {
+  id: string;
+  rfi_id: string;
+  rfi_number: string;
+  project_name: string;
+  type: 'created' | 'status_change' | 'response' | 'attachment' | 'updated';
+  description: string;
+  timestamp: string;
+  user?: string;
+  from_status?: string;
+  to_status?: string;
+}
 
 export default function RFIsPage() {
   const router = useRouter();
@@ -55,6 +70,107 @@ export default function RFIsPage() {
 
   const handleRowClick = (rfiId: string) => {
     router.push(`/rfis/${rfiId}`);
+  };
+
+  // Generate activity timeline from RFI data
+  const generateActivityTimeline = (): RFIActivity[] => {
+    const activities: RFIActivity[] = [];
+
+    rfis.forEach(rfi => {
+      const project = projects.find(p => p.id === rfi.project_id);
+      const projectName = project?.project_name || 'Unknown Project';
+
+      // RFI Creation
+      activities.push({
+        id: `${rfi.id}-created`,
+        rfi_id: rfi.id,
+        rfi_number: rfi.rfi_number,
+        project_name: projectName,
+        type: 'created',
+        description: `RFI created: ${rfi.subject}`,
+        timestamp: rfi.created_at,
+        user: rfi.created_by
+      });
+
+      // Status changes (simulated based on current status and dates)
+      if (rfi.status === 'sent' || rfi.status === 'responded' || rfi.status === 'closed') {
+        activities.push({
+          id: `${rfi.id}-activated`,
+          rfi_id: rfi.id,
+          rfi_number: rfi.rfi_number,
+          project_name: projectName,
+          type: 'status_change',
+          description: `Status changed from Draft to Active`,
+          timestamp: rfi.updated_at,
+          from_status: 'draft',
+          to_status: 'active'
+        });
+      }
+
+      if (rfi.status === 'sent' || rfi.status === 'responded' || rfi.status === 'closed') {
+        activities.push({
+          id: `${rfi.id}-sent`,
+          rfi_id: rfi.id,
+          rfi_number: rfi.rfi_number,
+          project_name: projectName,
+          type: 'status_change',
+          description: `RFI sent to client`,
+          timestamp: rfi.updated_at,
+          from_status: 'active',
+          to_status: 'sent'
+        });
+      }
+
+      // Response activity
+      if (rfi.response && rfi.response_date) {
+        activities.push({
+          id: `${rfi.id}-response`,
+          rfi_id: rfi.id,
+          rfi_number: rfi.rfi_number,
+          project_name: projectName,
+          type: 'response',
+          description: `Client response received`,
+          timestamp: rfi.response_date,
+          user: 'Client'
+        });
+      }
+
+      // Attachments activity
+      if (rfi.attachment_files && rfi.attachment_files.length > 0) {
+        activities.push({
+          id: `${rfi.id}-attachments`,
+          rfi_id: rfi.id,
+          rfi_number: rfi.rfi_number,
+          project_name: projectName,
+          type: 'attachment',
+          description: `${rfi.attachment_files.length} attachment(s) added`,
+          timestamp: rfi.created_at, // Approximate timestamp
+          user: rfi.created_by
+        });
+      }
+    });
+
+    // Sort by timestamp (most recent first)
+    return activities.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  };
+
+  const activityTimeline = generateActivityTimeline().slice(0, 20); // Show last 20 activities
+
+  const getActivityIcon = (type: RFIActivity['type']) => {
+    switch (type) {
+      case 'created':
+        return <Plus className="w-4 h-4 text-blue-600" />;
+      case 'status_change':
+        return <Send className="w-4 h-4 text-purple-600" />;
+      case 'response':
+        return <MessageSquare className="w-4 h-4 text-green-600" />;
+      case 'attachment':
+        return <FileText className="w-4 h-4 text-orange-600" />;
+      case 'updated':
+        return <CheckCircle className="w-4 h-4 text-blue-600" />;
+      default:
+        return <Clock className="w-4 h-4 text-gray-600" />;
+    }
   };
 
   if (loadingData || loading) {
@@ -205,6 +321,92 @@ export default function RFIsPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Activity Timeline Section */}
+      {rfis.length > 0 && (
+        <div className="mt-8 bg-white rounded-lg border border-gray-200">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Clock className="w-5 h-5 text-gray-500" />
+                <h2 className="text-lg font-semibold text-gray-900">Recent Activity</h2>
+              </div>
+              <span className="text-sm text-gray-500">Last 20 activities</span>
+            </div>
+          </div>
+          
+          <div className="p-6">
+            {activityTimeline.length > 0 ? (
+              <div className="space-y-4">
+                {activityTimeline.map((activity, index) => (
+                  <div key={activity.id} className="flex items-start space-x-3">
+                    {/* Icon */}
+                    <div className="flex-shrink-0 mt-1">
+                      <div className="w-8 h-8 bg-gray-50 rounded-full flex items-center justify-center border border-gray-200">
+                        {getActivityIcon(activity.type)}
+                      </div>
+                    </div>
+                    
+                    {/* Content */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <Link 
+                            href={`/rfis/${activity.rfi_id}`}
+                            className="text-sm font-medium text-blue-600 hover:text-blue-800"
+                          >
+                            {activity.rfi_number}
+                          </Link>
+                          <span className="text-sm text-gray-500">•</span>
+                          <span className="text-sm text-gray-600">{activity.project_name}</span>
+                        </div>
+                        <div className="flex items-center space-x-2 text-xs text-gray-500">
+                          {activity.user && (
+                            <>
+                              <User className="w-3 h-3" />
+                              <span>{activity.user}</span>
+                              <span>•</span>
+                            </>
+                          )}
+                          <span>
+                            {isToday(new Date(activity.timestamp)) 
+                              ? `Today at ${format(new Date(activity.timestamp), 'h:mm a')}`
+                              : isYesterday(new Date(activity.timestamp))
+                              ? `Yesterday at ${format(new Date(activity.timestamp), 'h:mm a')}`
+                              : isThisWeek(new Date(activity.timestamp))
+                              ? format(new Date(activity.timestamp), 'EEEE \'at\' h:mm a')
+                              : format(new Date(activity.timestamp), 'MMM d, yyyy \'at\' h:mm a')
+                            }
+                          </span>
+                        </div>
+                      </div>
+                      <p className="text-sm text-gray-700 mt-1">{activity.description}</p>
+                      
+                      {/* Status change details */}
+                      {activity.type === 'status_change' && activity.from_status && activity.to_status && (
+                        <div className="flex items-center space-x-2 mt-2">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(activity.from_status)}`}>
+                            {activity.from_status}
+                          </span>
+                          <span className="text-gray-400">→</span>
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(activity.to_status)}`}>
+                            {activity.to_status}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <Clock className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                <p className="text-sm text-gray-500">No recent activity</p>
+              </div>
+            )}
           </div>
         </div>
       )}

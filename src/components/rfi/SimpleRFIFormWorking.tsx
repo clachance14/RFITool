@@ -814,19 +814,6 @@ export function SimpleRFIFormWorking({ isReadOnly = false }: SimpleRFIFormWorkin
               disabled={isReadOnly}
             />
           </div>
-
-          {/* Activity Feed Placeholder */}
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Activity</h3>
-            <div className="text-center py-8">
-              <div className="text-gray-400 mb-2">
-                <svg className="mx-auto h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <p className="text-sm text-gray-500">Activity timeline will appear here</p>
-            </div>
-          </div>
         </div>
       </form>
     </div>
