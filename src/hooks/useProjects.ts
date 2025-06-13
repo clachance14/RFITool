@@ -26,10 +26,10 @@ export function useProjects() {
         throw new Error('User not authenticated');
       }
       
-      // Get the user's company_id from the company_users table
+      // Get the user's role and company info
       const { data: companyUserData, error: companyUserError } = await supabase
         .from('company_users')
-        .select('company_id')
+        .select('company_id, role_id')
         .eq('user_id', user.id)
         .maybeSingle();
       
@@ -37,16 +37,25 @@ export function useProjects() {
         throw new Error('Unable to find user company association');
       }
 
-      // Query projects filtered by the user's company
-      const { data, error } = await supabase
-        .from('projects')
-        .select('*')
-        .eq('company_id', companyUserData.company_id);
+      let projectsQuery = supabase.from('projects').select('*');
+      
+      // App owner (role_id = 0) sees ALL projects across ALL companies
+      if (companyUserData.role_id === 0) {
+        // No filter - show all projects
+        console.log('App owner: Loading all projects across companies');
+      } else {
+        // Other roles see projects filtered by their company
+        projectsQuery = projectsQuery.eq('company_id', companyUserData.company_id);
+        console.log('Regular user: Loading projects for company', companyUserData.company_id);
+      }
+
+      const { data, error } = await projectsQuery;
 
       if (error) {
         throw error;
       }
 
+      console.log(`Loaded ${data?.length || 0} projects`);
       setProjects(data || []);
       return { data, error: undefined };
 
@@ -70,10 +79,10 @@ export function useProjects() {
         throw new Error('User not authenticated');
       }
       
-      // Get the user's company_id from the company_users table
+      // Get the user's role and company info
       const { data: companyUserData, error: companyUserError } = await supabase
         .from('company_users')
-        .select('company_id')
+        .select('company_id, role_id')
         .eq('user_id', user.id)
         .maybeSingle();
       
@@ -81,13 +90,19 @@ export function useProjects() {
         throw new Error('Unable to find user company association');
       }
 
-      // Query the specific project, ensuring it belongs to the user's company
-      const { data, error } = await supabase
-        .from('projects')
-        .select('*')
-        .eq('id', id)
-        .eq('company_id', companyUserData.company_id)
-        .single();
+      let projectQuery = supabase.from('projects').select('*').eq('id', id);
+      
+      // App owner (role_id = 0) can access any project
+      if (companyUserData.role_id === 0) {
+        // No company filter - can access any project
+        console.log('App owner: Accessing project across companies');
+      } else {
+        // Other roles can only access projects in their company
+        projectQuery = projectQuery.eq('company_id', companyUserData.company_id);
+        console.log('Regular user: Accessing project in company', companyUserData.company_id);
+      }
+
+      const { data, error } = await projectQuery.single();
       
       if (error) {
         throw error;
@@ -119,10 +134,10 @@ export function useProjects() {
         throw new Error('User not authenticated');
       }
       
-      // Get the user's company_id from the company_users table
+      // Get the user's role and company info
       const { data: companyUserData, error: companyUserError } = await supabase
         .from('company_users')
-        .select('company_id')
+        .select('company_id, role_id')
         .eq('user_id', user.id)
         .maybeSingle();
       
@@ -130,12 +145,18 @@ export function useProjects() {
         throw new Error('Unable to find user company association');
       }
       
+      // For app_owner, we need to specify which company to create the project in
+      // This should be handled by the UI, but for now we'll use their assigned company
+      if (companyUserData.role_id === 0 && !projectData.company_id) {
+        throw new Error('App owner must specify which company to create project for');
+      }
+      
       const newProjectData = {
         project_name: projectData.project_name,
         contractor_job_number: projectData.contractor_job_number,
         job_contract_number: projectData.job_contract_number,
         client_company_name: projectData.client_company_name,
-        company_id: companyUserData.company_id, // Use the retrieved company_id
+        company_id: projectData.company_id || companyUserData.company_id, // Use specified company_id or user's company
         created_by: user.id, // Track who created the project
         project_manager_contact: projectData.project_manager_contact || '',
         client_contact_name: projectData.client_contact_name || '',

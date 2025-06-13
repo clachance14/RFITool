@@ -57,8 +57,9 @@ export default function HomePage() {
     );
   }
 
-  const activeRFIs = rfis.filter(rfi => ["active", "sent", "responded", "overdue", "returned", "revised"].includes(rfi.status)); const terminatedRFIs = rfis.filter(rfi => ["closed", "voided", "rejected", "superseded"].includes(rfi.status));
-  const overdueRFIs = rfis.filter(rfi => rfi.status === 'overdue');
+  const activeRFIs = rfis.filter(rfi => rfi.status === 'active');
+  const terminatedRFIs = rfis.filter(rfi => rfi.status === 'closed');
+  const overdueRFIs = rfis.filter(rfi => rfi.stage === 'late_overdue');
   console.log('DEBUG: RFI count is:', rfis.length, 'Projects:', projects.length);
   console.log("DEBUG: RFI count:", rfis.length, "Projects:", projects.length); const recentProjects = projects.slice(0, 5);
 
@@ -117,7 +118,7 @@ export default function HomePage() {
                 </div>
               </div>
               <div className="ml-4">
-                <div className="text-sm font-medium text-gray-500">Terminated RFIs</div>
+                <div className="text-sm font-medium text-gray-500">Closed RFIs</div>
                 <div className="text-2xl font-bold text-gray-900">{terminatedRFIs.length}</div>
               </div>
             </div>

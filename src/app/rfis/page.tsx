@@ -93,7 +93,7 @@ export default function RFIsPage() {
       });
 
       // Status changes (simulated based on current status and dates)
-      if (rfi.status === 'sent' || rfi.status === 'responded' || rfi.status === 'closed') {
+      if (rfi.status === 'active' || rfi.status === 'closed') {
         activities.push({
           id: `${rfi.id}-activated`,
           rfi_id: rfi.id,
@@ -107,7 +107,7 @@ export default function RFIsPage() {
         });
       }
 
-      if (rfi.status === 'sent' || rfi.status === 'responded' || rfi.status === 'closed') {
+      if (rfi.stage === 'sent_to_client' && rfi.status === 'active') {
         activities.push({
           id: `${rfi.id}-sent`,
           rfi_id: rfi.id,
@@ -117,7 +117,7 @@ export default function RFIsPage() {
           description: `RFI sent to client`,
           timestamp: rfi.updated_at,
           from_status: 'active',
-          to_status: 'sent'
+          to_status: 'active'
         });
       }
 
@@ -242,23 +242,17 @@ export default function RFIsPage() {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-2/5">
                     RFI Details
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">
                     Project
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/6">
                     Status
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/6">
                     Created
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Attachments
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
                   </th>
                 </tr>
               </thead>
@@ -269,53 +263,40 @@ export default function RFIsPage() {
                     className="hover:bg-gray-50 cursor-pointer transition-colors"
                     onClick={() => handleRowClick(rfi.id)}
                   >
-                    <td className="px-6 py-4">
+                    <td className="px-4 py-4">
                       <div>
                         <div className="text-sm font-medium text-gray-900">
                           {rfi.rfi_number}
                         </div>
-                        <div className="text-sm text-gray-600">
+                        <div className="text-sm text-gray-600 truncate">
                           {rfi.subject}
                         </div>
+                        {rfi.attachment_files && rfi.attachment_files.length > 0 && (
+                          <div className="flex items-center space-x-1 mt-1">
+                            <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                            </svg>
+                            <span className="text-xs text-gray-500">
+                              {rfi.attachment_files.length} attachment{rfi.attachment_files.length !== 1 ? 's' : ''}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm text-gray-900">
+                    <td className="px-4 py-4">
+                      <div className="text-sm text-gray-900 truncate">
                         {getProjectName(rfi.project_id)}
                       </div>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-4 py-4">
                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(rfi.status)}`}>
                         {rfi.status}
                       </span>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-4 py-4">
                       <div className="text-sm text-gray-900">
                         {new Date(rfi.created_at).toLocaleDateString()}
                       </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center space-x-2">
-                        {rfi.attachment_files && rfi.attachment_files.length > 0 ? (
-                          <>
-                            <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                            </svg>
-                            <span className="text-sm text-blue-600 font-medium">
-                              {rfi.attachment_files.length}
-                            </span>
-                          </>
-                        ) : (
-                          <span className="text-sm text-gray-400">None</span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-right text-sm font-medium">
-                      <Link href={`/rfis/${rfi.id}`} onClick={(e) => e.stopPropagation()}>
-                        <Button variant="outline" size="sm" title="View RFI Details">
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                      </Link>
                     </td>
                   </tr>
                 ))}

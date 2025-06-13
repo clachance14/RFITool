@@ -7,9 +7,14 @@ import { useRFIs } from '@/hooks/useRFIs';
 import type { RFI, RFIAttachment } from '@/lib/types';
 import { RFIWorkflowControls } from '@/components/rfi/RFIWorkflowControls';
 import { PermissionButton } from '@/components/PermissionButton';
+import { EmailTemplateService } from '@/services/emailTemplateService';
+import { EmailTemplateModal } from '@/components/rfi/EmailTemplateModal';
+import { RFIStatusDisplay, RFIProgress } from '@/components/rfi/RFIStatusBadge';
 
 interface RfiDetailViewProps {
   rfi: RFI;
+  hidePrintElements?: boolean;
+  includeAttachmentsInPDF?: boolean;
 }
 
 interface AttachmentPreviewModalProps {
@@ -117,7 +122,7 @@ function AttachmentPreviewModal({ attachment, isOpen, onClose }: AttachmentPrevi
   );
 }
 
-export function RfiDetailView({ rfi: initialRfi }: RfiDetailViewProps) {
+export function RfiDetailView({ rfi: initialRfi, hidePrintElements = false, includeAttachmentsInPDF = false }: RfiDetailViewProps) {
   const { projects } = useProjects();
   const { submitResponse } = useRFIs();
   const [rfi, setRfi] = useState<RFI>(initialRfi);
@@ -132,6 +137,7 @@ export function RfiDetailView({ rfi: initialRfi }: RfiDetailViewProps) {
   const [secureLinkData, setSecureLinkData] = useState<any>(null);
   const [generatingLink, setGeneratingLink] = useState(false);
   const [showLinkModal, setShowLinkModal] = useState(false);
+  const [showEmailTemplateModal, setShowEmailTemplateModal] = useState(false);
   
   const project = projects.find(p => p.id === rfi.project_id);
 
@@ -217,6 +223,35 @@ export function RfiDetailView({ rfi: initialRfi }: RfiDetailViewProps) {
         alert('Failed to copy link');
       });
     }
+  };
+
+  const getEmailTemplate = (rfi: any, linkData: any, project: any) => {
+    const template = EmailTemplateService.generateClientLinkTemplate(
+      rfi,
+      linkData,
+      project,
+      {
+        senderName: 'Project Team',
+        senderTitle: 'Project Manager',
+        companyName: project?.contractor_job_number || 'Construction Company',
+        includeUrgencyInSubject: true,
+        includeProjectDetails: true,
+        signatureType: 'professional'
+      }
+    );
+    return template.plainText;
+  };
+
+  const getEmailSubject = (rfi: any, linkData: any, project: any) => {
+    const template = EmailTemplateService.generateClientLinkTemplate(
+      rfi,
+      linkData,
+      project,
+      {
+        includeUrgencyInSubject: true
+      }
+    );
+    return template.subject;
   };
 
   // Helper function to format file size
@@ -531,7 +566,19 @@ export function RfiDetailView({ rfi: initialRfi }: RfiDetailViewProps) {
                 <label className="font-semibold text-gray-700">Priority:</label>
                 <p className="text-gray-900 capitalize">{rfi.priority}</p>
               </div>
+              <div>
+                <label className="font-semibold text-gray-700">Status:</label>
+                <RFIStatusDisplay status={rfi.status} stage={rfi.stage} layout="horizontal" />
+              </div>
             </div>
+            
+            {/* Progress Indicator */}
+            {!hidePrintElements && (
+              <div className="mt-6">
+                <label className="block font-semibold text-gray-700 mb-2">Workflow Progress:</label>
+                <RFIProgress status={rfi.status} stage={rfi.stage} />
+              </div>
+            )}
           </div>
 
           {/* Cost Breakdown Section - Only show if there are costs */}
@@ -756,6 +803,86 @@ export function RfiDetailView({ rfi: initialRfi }: RfiDetailViewProps) {
             </div>
           </div>
 
+          {/* PDF Attachments Section - Only shown in PDF exports */}
+          {includeAttachmentsInPDF && rfi.attachment_files && rfi.attachment_files.length > 0 && (
+            <div className="px-8 py-6 border-b border-gray-300">
+              <h2 className="text-lg font-bold text-gray-900 mb-4 pb-2 border-b border-gray-300">
+                Attachments
+              </h2>
+              
+              <div className="space-y-6">
+                {rfi.attachment_files.map((attachment, index) => (
+                  <div key={attachment.id || index} className="border border-gray-200 rounded-lg p-4">
+                    <div className="flex items-center space-x-2 mb-3">
+                      {attachment.file_type?.includes('pdf') ? (
+                        <svg className="w-5 h-5 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
+                        </svg>
+                      ) : attachment.file_type?.includes('image') ? (
+                        <svg className="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
+                        </svg>
+                      ) : attachment.file_type?.includes('word') || attachment.file_type?.includes('document') ? (
+                        <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
+                        </svg>
+                      ) : (
+                        <svg className="w-5 h-5 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
+                        </svg>
+                      )}
+                      <div>
+                        <h3 className="font-semibold text-gray-900">{attachment.file_name}</h3>
+                        <div className="text-sm text-gray-600">
+                          {attachment.file_type || 'Unknown'} • {' '}
+                          {attachment.file_size_bytes ? formatFileSize(attachment.file_size_bytes) : 'Unknown size'} • {' '}
+                          Added {format(new Date(attachment.created_at || rfi.created_at), 'MM/dd/yyyy')}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Embed images directly in PDF */}
+                    {attachment.file_type?.includes('image') && attachment.public_url ? (
+                      <div className="mt-3">
+                        <img
+                          src={attachment.public_url}
+                          alt={attachment.file_name}
+                          className="max-w-full h-auto rounded border border-gray-300"
+                          style={{ maxHeight: '500px' }}
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                          }}
+                        />
+                      </div>
+                    ) : attachment.file_type?.includes('pdf') && attachment.public_url ? (
+                      /* For PDFs, show a note that it's attached */
+                      <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded">
+                        <p className="text-sm text-gray-700">
+                          📄 PDF document attached. File can be accessed separately.
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          URL: {attachment.public_url}
+                        </p>
+                      </div>
+                    ) : (
+                      /* For other file types, show file info */
+                      <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded">
+                        <p className="text-sm text-gray-700">
+                          📎 File attached. Download required to view contents.
+                        </p>
+                        {attachment.public_url && (
+                          <p className="text-xs text-gray-500 mt-1">
+                            URL: {attachment.public_url}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Client Response Section */}
           <div className="px-8 py-6 print:hidden">
             <h2 className="text-lg font-bold text-gray-900 mb-4 pb-2 border-b border-gray-300">
@@ -774,7 +901,7 @@ export function RfiDetailView({ rfi: initialRfi }: RfiDetailViewProps) {
                 onChange={(e) => setResponseText(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="Enter your response to this RFI..."
-                disabled={!!rfi.response && rfi.status === 'responded'}
+                disabled={!!rfi.response && rfi.stage === 'response_received'}
               />
             </div>
 
@@ -791,7 +918,7 @@ export function RfiDetailView({ rfi: initialRfi }: RfiDetailViewProps) {
                   onChange={(e) => setSubmittedBy(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="Your name"
-                  disabled={!!rfi.response && rfi.status === 'responded'}
+                  disabled={!!rfi.response && rfi.stage === 'response_received'}
                 />
               </div>
               <div>
@@ -805,13 +932,13 @@ export function RfiDetailView({ rfi: initialRfi }: RfiDetailViewProps) {
                   onChange={(e) => setCmApproval(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="CM approval status"
-                  disabled={!!rfi.response && rfi.status === 'responded'}
+                  disabled={!!rfi.response && rfi.stage === 'response_received'}
                 />
               </div>
             </div>
 
             {/* Submit Response Button */}
-            {(!rfi.response || rfi.status !== 'responded') && (
+            {(!rfi.response || rfi.stage !== 'response_received') && (
               <div className="flex justify-end">
                 <PermissionButton
                   permission="respond_to_rfi"
@@ -837,7 +964,7 @@ export function RfiDetailView({ rfi: initialRfi }: RfiDetailViewProps) {
             )}
 
             {/* Show existing response if available */}
-            {rfi.response && rfi.status === 'responded' && (
+            {rfi.response && rfi.stage === 'response_received' && (
               <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-md">
                 <h4 className="font-semibold text-green-800 mb-2">Response Submitted</h4>
                 <p className="text-green-700 text-sm">
@@ -849,12 +976,15 @@ export function RfiDetailView({ rfi: initialRfi }: RfiDetailViewProps) {
         </div>
 
         {/* Workflow Controls */}
-        <div className="mt-6 print:hidden">
-          <RFIWorkflowControls rfi={rfi} onStatusChange={handleStatusChange} />
-        </div>
+        {!hidePrintElements && (
+          <div className="mt-6 print:hidden">
+            <RFIWorkflowControls rfi={rfi} onStatusChange={handleStatusChange} />
+          </div>
+        )}
 
         {/* Action Buttons */}
-        <div className="mt-6 flex justify-center space-x-4 print:hidden">
+        {!hidePrintElements && (
+          <div className="mt-6 flex justify-center space-x-4 print:hidden">
           <button
             onClick={() => window.history.back()}
             className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
@@ -916,6 +1046,7 @@ export function RfiDetailView({ rfi: initialRfi }: RfiDetailViewProps) {
             </PermissionButton>
           )}
         </div>
+        )}
       </div>
 
       {/* Attachment Preview Modal */}
@@ -924,6 +1055,17 @@ export function RfiDetailView({ rfi: initialRfi }: RfiDetailViewProps) {
         isOpen={isPreviewOpen}
         onClose={closePreview}
       />
+
+      {/* Email Template Modal */}
+      {showEmailTemplateModal && secureLinkData && (
+        <EmailTemplateModal
+          isOpen={showEmailTemplateModal}
+          onClose={() => setShowEmailTemplateModal(false)}
+          rfi={rfi}
+          linkData={secureLinkData}
+          project={project}
+        />
+      )}
 
       {/* Secure Link Modal */}
       {showLinkModal && secureLinkData && (
@@ -970,7 +1112,7 @@ export function RfiDetailView({ rfi: initialRfi }: RfiDetailViewProps) {
                       className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 flex items-center space-x-1"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002 2h-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
                       </svg>
                       <span>Copy</span>
                     </button>
@@ -996,16 +1138,68 @@ export function RfiDetailView({ rfi: initialRfi }: RfiDetailViewProps) {
               </div>
 
               <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
-                <h4 className="font-medium text-blue-800 mb-2">Email Template</h4>
-                <div className="text-sm text-blue-700">
-                  <p className="mb-2">You can use this template when sending the link to your client:</p>
-                  <div className="bg-white p-3 border rounded text-gray-800 italic">
-                                         "Dear Client,<br/><br/>
-                    Please review and respond to RFI {rfi.rfi_number} - {rfi.subject} using the secure link below:<br/><br/>
-                    {secureLinkData.secure_link}<br/><br/>
-                    This link will expire on {format(new Date(secureLinkData.expires_at), 'PPP')}.<br/><br/>
-                    Best regards"
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="font-medium text-blue-800">Email Template</h4>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => setShowEmailTemplateModal(true)}
+                      className="flex items-center space-x-1 px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                      <span>Customize</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        const template = getEmailTemplate(rfi, secureLinkData, project);
+                        navigator.clipboard.writeText(template).then(() => {
+                          alert('Email template copied to clipboard!');
+                        }).catch(() => {
+                          alert('Failed to copy email template');
+                        });
+                      }}
+                      className="flex items-center space-x-1 px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002 2h-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                      </svg>
+                      <span>Quick Copy</span>
+                    </button>
                   </div>
+                </div>
+                
+                <div className="text-sm text-blue-700 mb-3">
+                  <p>Professional email template ready to send to your client:</p>
+                </div>
+                
+                <div className="bg-white border rounded-lg p-4 text-sm text-gray-800 font-mono max-h-48 overflow-y-auto">
+                  <div className="space-y-2">
+                    <div><strong>Subject:</strong> {getEmailSubject(rfi, secureLinkData, project)}</div>
+                    <div className="border-t pt-2 mt-2">
+                      <div className="whitespace-pre-line leading-relaxed text-xs">
+                        {getEmailTemplate(rfi, secureLinkData, project)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="mt-3 flex items-center justify-between">
+                  <div className="text-xs text-blue-600">
+                    <div className="flex items-center space-x-4">
+                      <span>✓ Professional formatting</span>
+                      <span>✓ Project details included</span>
+                      <span>✓ Clear instructions</span>
+                      <span>✓ Security reminders</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowEmailTemplateModal(true)}
+                    className="text-xs text-blue-700 hover:text-blue-900 underline"
+                  >
+                    View full template & customize →
+                  </button>
                 </div>
               </div>
             </div>

@@ -208,7 +208,10 @@ export default function ClientRFIPage() {
                 <Calendar className="w-4 h-4 text-gray-500" />
                 <div>
                   <div className="font-medium text-gray-900">
-                    {format(new Date(rfiData.date_created), 'PPP')}
+                    {rfiData.date_created && !isNaN(new Date(rfiData.date_created).getTime()) 
+                      ? format(new Date(rfiData.date_created), 'PPP')
+                      : 'Date not available'
+                    }
                   </div>
                   <div className="text-gray-500">Date Created</div>
                 </div>
@@ -302,7 +305,9 @@ export default function ClientRFIPage() {
                 
                 <div className="flex items-center space-x-2 text-sm text-gray-600">
                   <CheckCircle className="w-4 h-4 text-green-500" />
-                  <span>Submitted on {rfiData.date_responded ? format(new Date(rfiData.date_responded), 'PPP \'at\' p') : 'Unknown date'}</span>
+                  <span>Submitted on {rfiData.date_responded && !isNaN(new Date(rfiData.date_responded).getTime()) 
+                    ? format(new Date(rfiData.date_responded), 'PPP \'at\' p') 
+                    : 'Unknown date'}</span>
                 </div>
               </div>
             </div>

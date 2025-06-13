@@ -6,21 +6,26 @@ import { Upload, X, Eye, Settings, Users, Mail, Cog, FileText, Shield, Plus, Edi
 import { AdminProjectSection } from '@/components/project/AdminProjectSection';
 import { ExportSection } from '@/components/admin/ExportSection';
 import { CreateReadOnlyUser } from '@/components/admin/CreateReadOnlyUser';
+import { NotificationCenter } from '@/components/admin/NotificationCenter';
+import { RolePreviewSection } from '@/components/admin/RolePreviewSection';
+import { PermissionGate } from '@/components/PermissionGate';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 
 // User role mapping from role_id to role string
 const ROLE_MAPPING = {
-  1: 'owner',    // Company owner/creator
-  2: 'admin',    // Admin
-  3: 'rfi_user', // Regular RFI user
-  4: 'view_only', // View only user
+  0: 'app_owner',     // App owner - sees all companies (system admin)
+  1: 'super_admin',   // Company super admin - first user, can manage company
+  2: 'admin',         // Admin - manages own projects only
+  3: 'rfi_user',      // Regular RFI user
+  4: 'view_only',     // View only user
   5: 'client_collaborator' // Client user
 } as const;
 
 const userRoles = {
-  'owner': { label: 'Owner', color: 'bg-purple-100 text-purple-800', description: 'Full system access including user management' },
-  'admin': { label: 'Admin', color: 'bg-blue-100 text-blue-800', description: 'Manage RFIs, projects, and most settings' },
+  'app_owner': { label: 'App Owner', color: 'bg-red-100 text-red-800', description: 'System administrator with full cross-company access' },
+  'super_admin': { label: 'Super Admin', color: 'bg-purple-100 text-purple-800', description: 'Company administrator with user management capabilities' },
+  'admin': { label: 'Admin', color: 'bg-blue-100 text-blue-800', description: 'Manage own RFIs and projects' },
   'rfi_user': { label: 'RFI User', color: 'bg-yellow-100 text-yellow-800', description: 'Create and edit RFIs' },
   'view_only': { label: 'View Only', color: 'bg-gray-100 text-gray-800', description: 'Read-only access to RFIs and projects' },
   'client_collaborator': { label: 'Client', color: 'bg-orange-100 text-orange-800', description: 'View RFIs and project data, respond to RFIs' },
@@ -484,6 +489,7 @@ export default function AdminPage() {
     { id: 'projects', label: 'Project Settings', icon: FileText },
     { id: 'system', label: 'System Settings', icon: Cog },
     { id: 'notifications', label: 'Notifications', icon: Mail },
+    { id: 'role-preview', label: 'Role Preview', icon: Shield },
   ];
 
   return (
@@ -748,11 +754,15 @@ export default function AdminPage() {
               <div className="flex items-center justify-between">
                 <h2 className="text-xl font-semibold text-gray-900">User Management</h2>
                 <div className="flex space-x-2">
-                  <CreateReadOnlyUser onUserCreated={() => window.location.reload()} />
-                  <Button onClick={() => setShowAddUser(true)} className="bg-blue-600 hover:bg-blue-700">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add User
-                  </Button>
+                  <PermissionGate permission="create_readonly_user">
+                    <CreateReadOnlyUser onUserCreated={() => window.location.reload()} />
+                  </PermissionGate>
+                  <PermissionGate permission="create_user">
+                    <Button onClick={() => setShowAddUser(true)} className="bg-blue-600 hover:bg-blue-700">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add User
+                    </Button>
+                  </PermissionGate>
                 </div>
               </div>
 
@@ -821,15 +831,24 @@ export default function AdminPage() {
                           </div>
                         </td>
                         <td className="px-4 py-3">
-                          <select
-                            value={user.role}
-                            onChange={(e) => handleChangeUserRole(user.id, e.target.value)}
-                            className="text-xs border border-gray-300 rounded px-2 py-1"
+                          <PermissionGate 
+                            permission="edit_user_roles"
+                            fallback={
+                              <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${userRoles[user.role as keyof typeof userRoles]?.color}`}>
+                                {userRoles[user.role as keyof typeof userRoles]?.label}
+                              </span>
+                            }
                           >
-                            {Object.entries(userRoles).map(([key, role]) => (
-                              <option key={key} value={key}>{role.label}</option>
-                            ))}
-                          </select>
+                            <select
+                              value={user.role}
+                              onChange={(e) => handleChangeUserRole(user.id, e.target.value)}
+                              className="text-xs border border-gray-300 rounded px-2 py-1"
+                            >
+                              {Object.entries(userRoles).map(([key, role]) => (
+                                <option key={key} value={key}>{role.label}</option>
+                              ))}
+                            </select>
+                          </PermissionGate>
                         </td>
                         <td className="px-4 py-3">
                           <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
@@ -854,14 +873,16 @@ export default function AdminPage() {
                             >
                               <Edit className="h-3 w-3" />
                             </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleDeleteUser(user.id)}
-                              className="text-red-600 border-red-300 hover:bg-red-50"
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
+                            <PermissionGate permission="delete_user">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleDeleteUser(user.id)}
+                                className="text-red-600 border-red-300 hover:bg-red-50"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </PermissionGate>
                           </div>
                         </td>
                       </tr>
@@ -961,15 +982,14 @@ export default function AdminPage() {
 
           {/* Notifications Tab */}
           {activeTab === 'notifications' && (
-            <div className="space-y-6">
-              <h2 className="text-xl font-semibold text-gray-900">Notification Settings</h2>
-              <div className="bg-gray-50 rounded-lg p-8 text-center">
-                <Mail className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">Email & Notification Center</h3>
-                <p className="text-gray-600">Configure email templates, notification preferences, and alert settings.</p>
-                <p className="text-sm text-gray-500 mt-2">Coming soon...</p>
-              </div>
-            </div>
+            <NotificationCenter />
+          )}
+
+          {/* Role Preview Tab */}
+          {activeTab === 'role-preview' && (
+            <PermissionGate permission="edit_user_roles">
+              <RolePreviewSection />
+            </PermissionGate>
           )}
 
           {/* Add User Modal */}

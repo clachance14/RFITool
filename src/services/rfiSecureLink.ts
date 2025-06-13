@@ -32,14 +32,23 @@ export class RFISecureLinkService {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + expirationDays);
     
-    // Update RFI with secure link token
+    // First verify the RFI exists and user has access to it
+    const { data: existingRFI, error: selectError } = await supabase
+      .from('rfis')
+      .select('id')
+      .eq('id', rfiId)
+      .single();
+
+    if (selectError || !existingRFI) {
+      throw new Error('RFI not found or access denied');
+    }
+    
+    // Update RFI with secure link token using a more targeted approach
     const { error } = await supabase
       .from('rfis')
       .update({
         secure_link_token: token,
         link_expires_at: expiresAt.toISOString(),
-        status: 'sent',
-        date_sent: new Date().toISOString(),
         updated_at: new Date().toISOString()
       })
       .eq('id', rfiId);

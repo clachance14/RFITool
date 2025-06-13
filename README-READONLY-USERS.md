@@ -36,23 +36,15 @@ Your RFI tracking application now supports read-only users who can view all cont
 6. Click **Create User**
 7. Share the generated credentials with the user
 
-### Method 2: Using the Node.js Script
+### Method 2: Using the Node.js Script ⚠️ DEPRECATED
 
-1. Ensure you have the required environment variables set:
-   ```bash
-   NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-   SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
-   ```
+**Note:** This method is no longer available as the demo user creation script has been removed during code cleanup (June 2025). Use Method 1 (Admin Panel) instead.
 
-2. Run the script:
-   ```bash
-   cd RFITrak
-   node scripts/create-demo-user.js
-   ```
-
-3. The script will create a demo user with these credentials:
-   - **Email:** demo@readonly.com
-   - **Password:** readonly123
+~~1. Ensure you have the required environment variables set:~~
+~~2. Run the script: `node scripts/create-demo-user.js`~~
+~~3. The script will create a demo user with these credentials:~~
+   ~~- **Email:** demo@readonly.com~~
+   ~~- **Password:** readonly123~~
 
 ### Method 3: Manual Database Setup
 

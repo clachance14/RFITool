@@ -11,9 +11,20 @@ const baseRFISchema = {
   reason_for_rfi: z.string().min(1, 'Reason for RFI is required'),
   contractor_question: z.string().min(1, 'Contractor question is required'),
   project_id: z.string().min(1, 'Project selection is required'),
-  status: z.enum(['draft', 'active', 'sent', 'responded', 'closed', 'overdue', 'voided', 'revised', 'returned', 'rejected', 'superseded'], {
+  status: z.enum(['draft', 'active', 'closed'], {
     errorMap: () => ({ message: 'Invalid status value' }),
   }),
+  stage: z.enum([
+    'sent_to_client',
+    'awaiting_response', 
+    'response_received',
+    'field_work_in_progress',
+    'work_completed',
+    'declined',
+    'late_overdue',
+    'revision_requested',
+    'on_hold'
+  ]).optional().nullable(),
   urgency: z.enum(['urgent', 'non-urgent'], {
     errorMap: () => ({ message: 'Invalid urgency value' }),
   }),
@@ -43,6 +54,15 @@ const optionalRFIFields = {
   client_response_submitted_by: z.string().max(255, 'Maximum 255 characters allowed').optional(),
   client_cm_approval: z.string().max(255, 'Maximum 255 characters allowed').optional(),
   
+  // NEW: Field Work Tracking
+  work_started_date: z.string().datetime().optional(),
+  work_completed_date: z.string().datetime().optional(),
+  actual_labor_hours: z.number().positive().optional(),
+  actual_labor_cost: z.number().positive().optional(),
+  actual_material_cost: z.number().positive().optional(),
+  actual_equipment_cost: z.number().positive().optional(),
+  actual_total_cost: z.number().positive().optional(),
+  
   // System fields
   to_recipient: z.string().max(500, 'Maximum 500 characters allowed').optional(),
   revision: z.string().default('0'),
@@ -57,14 +77,18 @@ export const createRFISchema = z.object({
   ...optionalRFIFields,
 }).refine(
   (data) => {
-    // Additional validation: If status is 'sent', ensure required fields are present
-    if (data.status === 'sent') {
-      return !!data.reason_for_rfi && !!data.contractor_question;
+    // Additional validation: If status is 'active', ensure stage is provided
+    if (data.status === 'active' && !data.stage) {
+      return false;
+    }
+    // If stage is field_work_in_progress, status must be active
+    if (data.stage === 'field_work_in_progress' && data.status !== 'active') {
+      return false;
     }
     return true;
   },
   {
-    message: 'Reason for RFI and contractor question are required when sending an RFI',
+    message: 'Active RFIs must have a stage, and field work stages require active status',
     path: ['status'],
   }
 );
@@ -73,39 +97,56 @@ export const createRFISchema = z.object({
 export const updateRFISchema = z.object({
   subject: optionalTextField,
   description: optionalTextField,
-  status: z.enum(['draft', 'active', 'sent', 'responded', 'closed', 'overdue', 'voided', 'revised', 'returned', 'rejected', 'superseded']).optional(),
+  status: z.enum(['draft', 'active', 'closed']).optional(),
+  stage: z.enum([
+    'sent_to_client',
+    'awaiting_response', 
+    'response_received',
+    'field_work_in_progress',
+    'work_completed',
+    'declined',
+    'late_overdue',
+    'revision_requested',
+    'on_hold'
+  ]).optional().nullable(),
   priority: z.enum(['low', 'medium', 'high']).optional(),
   assigned_to: z.string().nullable().optional(),
   due_date: z.string().datetime().nullable().optional(),
   response: z.string().nullable().optional(),
   response_date: z.string().datetime().nullable().optional(),
-  // Edge case fields
+  
+  // NEW: Field Work Tracking
+  work_started_date: z.string().datetime().optional().nullable(),
+  work_completed_date: z.string().datetime().optional().nullable(),
+  actual_labor_hours: z.number().positive().optional().nullable(),
+  actual_labor_cost: z.number().positive().optional().nullable(),
+  actual_material_cost: z.number().positive().optional().nullable(),
+  actual_equipment_cost: z.number().positive().optional().nullable(),
+  actual_total_cost: z.number().positive().optional().nullable(),
+  
+  // Edge case fields (kept for compatibility)
   rejection_type: z.enum(['internal_review', 'client_rejected', 'client_rejected_not_in_scope']).optional(),
   rejection_reason: z.string().max(1000, 'Rejection reason too long').optional(),
   voided_reason: z.string().max(1000, 'Voided reason too long').optional(),
   superseded_by: z.string().uuid('Invalid RFI ID format').optional(),
 }).refine(
   (data) => {
-    // Additional validation: If status is 'sent', ensure required fields are present
-    if (data.status === 'sent') {
-      return !!data.description;
+    // Additional validation: If status is 'active', ensure stage is provided
+    if (data.status === 'active' && !data.stage) {
+      return false;
     }
-    // If status is voided, ensure voided_reason is provided
-    if (data.status === 'voided') {
-      return !!data.voided_reason;
+    // If stage is field_work_in_progress, status must be active
+    if (data.stage === 'field_work_in_progress' && data.status !== 'active') {
+      return false;
     }
-    // If status is rejected, ensure rejection_type and rejection_reason are provided
-    if (data.status === 'rejected') {
-      return !!data.rejection_type && !!data.rejection_reason;
-    }
-    // If status is superseded, ensure superseded_by is provided
-    if (data.status === 'superseded') {
-      return !!data.superseded_by;
+    // If work_completed_date is set, work_started_date should also be set
+    if (data.work_completed_date && !data.work_started_date) {
+      return false;
     }
     return true;
   },
   {
-    message: 'Additional information required for this status change',
+    message: 'Invalid status/stage combination or work date sequence',
     path: ['status'],
   }
 );

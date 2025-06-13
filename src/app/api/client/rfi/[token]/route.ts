@@ -1,6 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { RFISecureLinkService } from '@/services/rfiSecureLink';
+import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
+
+// Use service role client to bypass RLS
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  }
+);
 
 const clientResponseSchema = z.object({
   client_response: z.string().min(1, 'Response is required'),
@@ -9,6 +21,62 @@ const clientResponseSchema = z.object({
   additional_comments: z.string().optional(),
   client_cm_approval: z.string().optional()
 });
+
+// Validate a secure link token
+async function validateToken(token: string): Promise<{
+  valid: boolean;
+  rfi?: any;
+  reason?: string;
+}> {
+  try {
+    const { data: rfi, error } = await supabaseAdmin
+      .from('rfis')
+      .select(`
+        *,
+        projects!inner(
+          id,
+          project_name,
+          client_company_name,
+          contractor_job_number
+        )
+      `)
+      .eq('secure_link_token', token)
+      .single();
+
+    if (error || !rfi) {
+      return {
+        valid: false,
+        reason: 'Invalid or expired link'
+      };
+    }
+
+    // Check if link has expired
+    if (rfi.link_expires_at && new Date(rfi.link_expires_at) < new Date()) {
+      return {
+        valid: false,
+        reason: 'Link has expired'
+      };
+    }
+
+    // Check if RFI has already been responded to
+    if (rfi.status === 'responded' && !rfi.allow_multiple_responses) {
+      return {
+        valid: false,
+        reason: 'This RFI has already been responded to'
+      };
+    }
+
+    return {
+      valid: true,
+      rfi
+    };
+  } catch (error) {
+    return {
+      valid: false,
+      reason: 'Failed to validate link'
+    };
+  }
+}
 
 // GET /api/client/rfi/[token] - Get RFI data for client viewing
 export async function GET(
@@ -25,18 +93,26 @@ export async function GET(
       );
     }
 
-    const result = await RFISecureLinkService.getRFIByToken(token);
-    
-    if (!result.success) {
+    const validation = await validateToken(token);
+    if (!validation.valid) {
       return NextResponse.json(
-        { success: false, error: result.message },
+        { success: false, error: validation.reason },
         { status: 404 }
       );
     }
 
+    // Fetch complete RFI data with attachments
+    const { data: attachments } = await supabaseAdmin
+      .from('rfi_attachments')
+      .select('*')
+      .eq('rfi_id', validation.rfi.id);
+
     return NextResponse.json({
       success: true,
-      data: result.data
+      data: {
+        ...validation.rfi,
+        attachments: attachments || []
+      }
     });
   } catch (error) {
     console.error('Error fetching RFI by token:', error);
@@ -77,23 +153,44 @@ export async function POST(
       );
     }
 
-    // Submit client response
-    const result = await RFISecureLinkService.submitClientResponse(
-      token,
-      validatedResponse.data
-    );
-
-    if (!result.success) {
+    // First validate the token
+    const validation = await validateToken(token);
+    if (!validation.valid) {
       return NextResponse.json(
-        { success: false, error: result.message },
+        { success: false, error: validation.reason || 'Invalid token' },
         { status: 400 }
+      );
+    }
+
+    // Update RFI with client response using admin client
+    const { data: updatedRFI, error } = await supabaseAdmin
+      .from('rfis')
+      .update({
+        client_response: validatedResponse.data.client_response,
+        client_response_submitted_by: validatedResponse.data.client_response_submitted_by,
+        response_status: validatedResponse.data.response_status,
+        additional_comments: validatedResponse.data.additional_comments,
+        client_cm_approval: validatedResponse.data.client_cm_approval,
+        status: 'responded',
+        date_responded: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('secure_link_token', token)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error updating RFI with client response:', error);
+      return NextResponse.json(
+        { success: false, error: `Failed to submit response: ${error.message}` },
+        { status: 500 }
       );
     }
 
     return NextResponse.json({
       success: true,
-      message: result.message,
-      data: result.rfi
+      message: 'Response submitted successfully',
+      data: updatedRFI
     });
   } catch (error) {
     console.error('Error submitting client response:', error);

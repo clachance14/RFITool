@@ -12,7 +12,8 @@ const mockRFIs: RFI[] = [
     project_id: '1',
     subject: 'Structural beam clarification',
     description: 'Need clarification on beam size for floor 3',
-    status: 'sent',
+    status: 'active',
+    stage: 'sent_to_client',
     priority: 'high',
     assigned_to: 'John Smith',
     due_date: '2024-02-15T00:00:00Z',
@@ -34,7 +35,8 @@ const mockRFIs: RFI[] = [
     project_id: '2',
     subject: 'HVAC system specifications',
     description: 'Clarification needed on HVAC system specifications for residential units',
-    status: 'responded',
+    status: 'active',
+    stage: 'response_received',
     priority: 'medium',
     assigned_to: 'Sarah Johnson',
     due_date: '2024-02-20T00:00:00Z',
@@ -56,7 +58,8 @@ const mockRFIs: RFI[] = [
     project_id: '1',
     subject: 'Electrical panel location',
     description: 'Need clarification on electrical panel placement in basement',
-    status: 'sent',
+    status: 'active',
+    stage: 'sent_to_client',
     priority: 'medium',
     assigned_to: 'Mike Wilson',
     due_date: '2024-02-18T00:00:00Z',
@@ -100,7 +103,8 @@ const mockRFIs: RFI[] = [
     project_id: '1',
     subject: 'Foundation waterproofing details',
     description: 'Need details on waterproofing membrane installation',
-    status: 'overdue',
+    status: 'active',
+    stage: 'late_overdue',
     priority: 'high',
     assigned_to: 'John Smith',
     due_date: '2024-01-20T00:00:00Z',
@@ -275,9 +279,14 @@ export function RFIProvider({ children }: { children: React.ReactNode }) {
         throw new Error('RFI not found');
       }
 
+      // Filter out null values to match RFI interface
+      const filteredData = Object.fromEntries(
+        Object.entries(validatedData).filter(([_, value]) => value !== null)
+      );
+
       const updatedRFI: RFI = {
         ...existingRFI,
-        ...validatedData,
+        ...filteredData,
         updated_at: new Date().toISOString(),
       };
 
@@ -330,8 +339,8 @@ export function RFIProvider({ children }: { children: React.ReactNode }) {
   }, [updateRFI]);
 
   const markAsOverdue = useCallback(async (id: string): Promise<RFI> => {
-    return updateRFIStatus(id, 'overdue');
-  }, [updateRFIStatus]);
+    return updateRFI(id, { stage: 'late_overdue' });
+  }, [updateRFI]);
 
   const submitResponse = useCallback(async (id: string, response: string): Promise<RFI> => {
     setLoading(true);
@@ -340,7 +349,7 @@ export function RFIProvider({ children }: { children: React.ReactNode }) {
       const updatedRFI = await updateRFI(id, {
         response,
         response_date: new Date().toISOString(),
-        status: 'responded',
+        stage: 'response_received',
       });
       return updatedRFI;
     } catch (err) {
@@ -362,7 +371,7 @@ export function RFIProvider({ children }: { children: React.ReactNode }) {
   }, [rfis]);
 
   const getOverdueRFIs = useCallback((): RFI[] => {
-    return rfis.filter(rfi => rfi.status === 'overdue' as RFIStatus);
+    return rfis.filter(rfi => rfi.stage === 'late_overdue');
   }, [rfis]);
 
   // Memoized values

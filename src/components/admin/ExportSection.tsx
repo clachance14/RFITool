@@ -15,7 +15,9 @@ import {
   Users,
   Archive,
   Eye,
-  X
+  X,
+  ChevronDown,
+  ChevronRight
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useProjects } from '@/hooks/useProjects';
@@ -45,7 +47,6 @@ export function ExportSection({ className = "" }: ExportSectionProps) {
   const [rfis, setRfis] = useState<any[]>([]);
   const [filteredRfis, setFilteredRfis] = useState<any[]>([]);
   const [selectedRfis, setSelectedRfis] = useState<RFISelection>({});
-  const [showExportModal, setShowExportModal] = useState(false);
   const [exportOptions, setExportOptions] = useState<ExportOptions>({
     selectedFields: DEFAULT_EXPORT_FIELDS.map(f => f.key),
     includeAttachments: true,
@@ -63,10 +64,18 @@ export function ExportSection({ className = "" }: ExportSectionProps) {
   // Field selection by category
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(['basic']));
   
+  // Export options panel
+  const [showExportOptions, setShowExportOptions] = useState(true);
+  
   // PDF generation
   const [generatingPDFs, setGeneratingPDFs] = useState(false);
   const pdfElementRef = useRef<HTMLDivElement>(null);
   const [currentPDFRfi, setCurrentPDFRfi] = useState<any>(null);
+
+  // PDF Preview
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewRfiIndex, setPreviewRfiIndex] = useState(0);
+  const [previewRfis, setPreviewRfis] = useState<any[]>([]);
 
   // Fetch RFIs
   useEffect(() => {
@@ -266,13 +275,56 @@ export function ExportSection({ className = "" }: ExportSectionProps) {
       };
 
       await exportService.exportSelectedRFIs(selectedData, options, generatePDFForRFI);
-      setShowExportModal(false);
     } catch (error) {
       console.error('Export error:', error);
       alert('Export failed. Please try again.');
     } finally {
       setGeneratingPDFs(false);
       setCurrentPDFRfi(null);
+    }
+  };
+
+  const handlePreview = () => {
+    const selectedData = getSelectedRFIsData();
+    if (selectedData.length === 0) {
+      alert('Please select at least one RFI to preview');
+      return;
+    }
+    
+    setPreviewRfis(selectedData);
+    setPreviewRfiIndex(0);
+    setShowPreview(true);
+  };
+
+  const handleExportFromPreview = async () => {
+    try {
+      setGeneratingPDFs(true);
+      
+      const projectName = selectedProject !== 'all' 
+        ? projects.find(p => p.id === selectedProject)?.project_name 
+        : undefined;
+
+      const options: ExportOptions = {
+        ...exportOptions,
+        projectName
+      };
+
+      await exportService.exportSelectedRFIs(previewRfis, options, generatePDFForRFI);
+      setShowPreview(false);
+    } catch (error) {
+      console.error('Export error:', error);
+      alert('Export failed. Please try again.');
+    } finally {
+      setGeneratingPDFs(false);
+      setCurrentPDFRfi(null);
+    }
+  };
+
+  const navigatePreview = (direction: 'prev' | 'next') => {
+    if (direction === 'prev' && previewRfiIndex > 0) {
+      setPreviewRfiIndex(previewRfiIndex - 1);
+    } else if (direction === 'next' && previewRfiIndex < previewRfis.length - 1) {
+      setPreviewRfiIndex(previewRfiIndex + 1);
     }
   };
 
@@ -328,38 +380,161 @@ export function ExportSection({ className = "" }: ExportSectionProps) {
   return (
     <div className={`space-y-6 ${className}`}>
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Export RFIs</h2>
-          <p className="text-gray-600">Export RFI data to Excel, PDF, or package with attachments</p>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">Export RFIs</h2>
+            <p className="text-gray-600">Export RFI data to Excel, PDF, or package with attachments</p>
+          </div>
+          <div className="flex items-center space-x-2">
+            <Button
+              onClick={handlePreview}
+              disabled={selectedCount === 0 || isLoading}
+              variant="outline"
+              className="bg-purple-50 border-purple-200 hover:bg-purple-100"
+            >
+              <Eye className="w-4 h-4 mr-2 text-purple-600" />
+              Preview PDF
+            </Button>
+            <Button
+              onClick={handleExport}
+              disabled={selectedCount === 0 || isLoading || exportOptions.selectedFields.length === 0 || generatingPDFs}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              <Download className="w-4 h-4 mr-2" />
+              {generatingPDFs ? 'Exporting...' : 'Export Selected'}
+            </Button>
+          </div>
         </div>
-        <div className="flex items-center space-x-2">
-          <Button
-            onClick={() => quickExport('excel')}
-            disabled={selectedCount === 0 || isLoading}
-            variant="outline"
-            className="bg-green-50 border-green-200 hover:bg-green-100"
+
+        {/* Export Options */}
+        <div className="bg-white border rounded-lg overflow-hidden">
+          <div 
+            className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 border-b"
+            onClick={() => setShowExportOptions(!showExportOptions)}
           >
-            <FileSpreadsheet className="w-4 h-4 mr-2 text-green-600" />
-            Quick Excel Export
-          </Button>
-          <Button
-            onClick={() => quickExport('csv')}
-            disabled={selectedCount === 0 || isLoading}
-            variant="outline"
-            className="bg-blue-50 border-blue-200 hover:bg-blue-100"
-          >
-            <FileSpreadsheet className="w-4 h-4 mr-2 text-blue-600" />
-            Quick CSV Export
-          </Button>
-          <Button
-            onClick={() => setShowExportModal(true)}
-            disabled={selectedCount === 0 || isLoading}
-            className="bg-blue-600 hover:bg-blue-700"
-          >
-            <Settings className="w-4 h-4 mr-2" />
-            Export Options
-          </Button>
+            <div className="flex items-center space-x-2">
+              {showExportOptions ? (
+                <ChevronDown className="w-5 h-5 text-gray-500" />
+              ) : (
+                <ChevronRight className="w-5 h-5 text-gray-500" />
+              )}
+              <h3 className="text-lg font-semibold text-gray-900">Export Options</h3>
+            </div>
+            <div className="text-sm text-gray-600">
+              {exportOptions.exportFormat} • {exportOptions.selectedFields.length} fields
+            </div>
+          </div>
+          
+          {showExportOptions && (
+            <div className="p-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Export Format */}
+            <div>
+              <h4 className="font-medium text-gray-900 mb-3">Export Format</h4>
+              <div className="space-y-2">
+                {[
+                  { value: 'excel', label: 'Excel Spreadsheet', icon: FileSpreadsheet },
+                  { value: 'csv', label: 'CSV Spreadsheet', icon: FileSpreadsheet },
+                  { value: 'pdf', label: 'PDF Package with Attachments', icon: FileText },
+                  { value: 'both', label: 'Both Excel and PDF', icon: Package }
+                ].map(option => (
+                  <label key={option.value} className="flex items-center space-x-3 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="exportFormat"
+                      value={option.value}
+                      checked={exportOptions.exportFormat === option.value}
+                      onChange={(e) => setExportOptions(prev => ({ 
+                        ...prev, 
+                        exportFormat: e.target.value as any 
+                      }))}
+                      className="text-blue-600"
+                    />
+                    <option.icon className="w-4 h-4 text-gray-500" />
+                    <span className="text-sm">{option.label}</span>
+                  </label>
+                ))}
+              </div>
+
+              <div className="mt-4">
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={exportOptions.includeAttachments}
+                    onChange={(e) => setExportOptions(prev => ({ 
+                      ...prev, 
+                      includeAttachments: e.target.checked 
+                    }))}
+                    className="rounded border-gray-300"
+                  />
+                  <span className="text-sm text-gray-700">Include attachments in PDF package</span>
+                </label>
+              </div>
+            </div>
+
+            {/* Field Selection */}
+            <div>
+              <h4 className="font-medium text-gray-900 mb-3">Select Fields to Export</h4>
+              <div className="space-y-3 max-h-80 overflow-y-auto border rounded-md p-3">
+                {Object.entries(groupedFields).map(([category, fields]) => (
+                  <div key={category}>
+                    <div 
+                      className="flex items-center justify-between cursor-pointer py-1 hover:bg-gray-50 rounded px-2 -mx-2"
+                      onClick={() => toggleCategory(category)}
+                    >
+                      <div className="flex items-center space-x-2">
+                        {expandedCategories.has(category) ? (
+                          <ChevronDown className="w-4 h-4 text-gray-500" />
+                        ) : (
+                          <ChevronRight className="w-4 h-4 text-gray-500" />
+                        )}
+                        <h5 className="font-medium text-sm text-gray-800">
+                          {categoryLabels[category as keyof typeof categoryLabels]}
+                        </h5>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleCategoryFields(category);
+                          }}
+                          className="text-xs text-blue-600 hover:text-blue-800"
+                        >
+                          {fields.every(f => exportOptions.selectedFields.includes(f.key)) 
+                            ? 'Deselect All' : 'Select All'}
+                        </button>
+                        <span className="text-xs text-gray-500">
+                          ({fields.filter(f => exportOptions.selectedFields.includes(f.key)).length}/{fields.length})
+                        </span>
+                      </div>
+                    </div>
+                    
+                    {expandedCategories.has(category) && (
+                      <div className="ml-6 space-y-1">
+                        {fields.map(field => (
+                          <label key={field.key} className="flex items-center space-x-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={exportOptions.selectedFields.includes(field.key)}
+                              onChange={() => toggleFieldSelection(field.key)}
+                              className="rounded border-gray-300 text-blue-600"
+                            />
+                            <span className="text-sm text-gray-700">{field.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 text-sm text-gray-600">
+                Selected: {exportOptions.selectedFields.length} fields
+              </div>
+            </div>
+          </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -449,6 +624,15 @@ export function ExportSection({ className = "" }: ExportSectionProps) {
           
           {selectedCount > 0 && (
             <div className="flex items-center space-x-2">
+              <Button
+                onClick={handlePreview}
+                variant="outline"
+                size="sm"
+                className="bg-purple-50 border-purple-200 hover:bg-purple-100"
+              >
+                <Eye className="w-4 h-4 mr-2 text-purple-600" />
+                Preview
+              </Button>
               <Button
                 onClick={() => quickExport('pdf')}
                 disabled={generatingPDFs}
@@ -542,156 +726,115 @@ export function ExportSection({ className = "" }: ExportSectionProps) {
         )}
       </div>
 
-      {/* Export Options Modal */}
-      {showExportModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+
+
+      {/* Hidden PDF Generation Element */}
+      {currentPDFRfi && (
+        <div className="fixed -top-[9999px] left-0 w-[210mm] bg-white">
+          <div ref={pdfElementRef}>
+            <RfiDetailView 
+              rfi={currentPDFRfi} 
+              hidePrintElements={true} 
+              includeAttachmentsInPDF={true}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* PDF Preview Modal */}
+      {showPreview && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 print:bg-white print:relative print:block print:p-0 print:inset-auto">
+          <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[95vh] overflow-hidden print:max-w-none print:max-h-none print:shadow-none print:rounded-none">
             {/* Modal Header */}
-            <div className="flex items-center justify-between p-6 border-b">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900">Export Options</h3>
-                <p className="text-sm text-gray-600">
-                  {exportService.getExportSummary(getSelectedRFIsData(), exportOptions)}
-                </p>
+            <div className="flex items-center justify-between p-4 border-b bg-gray-50 print:hidden">
+              <div className="flex items-center space-x-4">
+                <h3 className="text-lg font-semibold text-gray-900">PDF Preview</h3>
+                <div className="flex items-center space-x-2 bg-white px-3 py-1 rounded-md border">
+                  <span className="text-sm text-gray-600">
+                    RFI {previewRfis[previewRfiIndex]?.rfi_number} - {previewRfis[previewRfiIndex]?.subject}
+                  </span>
+                </div>
               </div>
-              <button
-                onClick={() => setShowExportModal(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X className="w-6 h-6" />
-              </button>
+              <div className="flex items-center space-x-2">
+                {previewRfis.length > 1 && (
+                  <div className="flex items-center space-x-2">
+                    <Button
+                      onClick={() => navigatePreview('prev')}
+                      disabled={previewRfiIndex === 0}
+                      variant="outline"
+                      size="sm"
+                    >
+                      ← Previous
+                    </Button>
+                    <span className="text-sm text-gray-600 bg-white px-2 py-1 rounded border">
+                      {previewRfiIndex + 1} of {previewRfis.length}
+                    </span>
+                    <Button
+                      onClick={() => navigatePreview('next')}
+                      disabled={previewRfiIndex === previewRfis.length - 1}
+                      variant="outline"
+                      size="sm"
+                    >
+                      Next →
+                    </Button>
+                  </div>
+                )}
+                <button
+                  onClick={() => setShowPreview(false)}
+                  className="text-gray-400 hover:text-gray-600 p-1"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
             </div>
 
             {/* Modal Content */}
-            <div className="p-6 overflow-y-auto max-h-[60vh]">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Export Format */}
-                <div>
-                  <h4 className="font-medium text-gray-900 mb-3">Export Format</h4>
-                  <div className="space-y-2">
-                    {[
-                      { value: 'excel', label: 'Excel Spreadsheet', icon: FileSpreadsheet },
-                      { value: 'csv', label: 'CSV Spreadsheet', icon: FileSpreadsheet },
-                      { value: 'pdf', label: 'PDF Package with Attachments', icon: FileText },
-                      { value: 'both', label: 'Both Excel and PDF', icon: Package }
-                    ].map(option => (
-                      <label key={option.value} className="flex items-center space-x-3 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="exportFormat"
-                          value={option.value}
-                          checked={exportOptions.exportFormat === option.value}
-                          onChange={(e) => setExportOptions(prev => ({ 
-                            ...prev, 
-                            exportFormat: e.target.value as any 
-                          }))}
-                          className="text-blue-600"
-                        />
-                        <option.icon className="w-4 h-4 text-gray-500" />
-                        <span className="text-sm">{option.label}</span>
-                      </label>
-                    ))}
-                  </div>
-
-                  <div className="mt-4">
-                    <label className="flex items-center space-x-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={exportOptions.includeAttachments}
-                        onChange={(e) => setExportOptions(prev => ({ 
-                          ...prev, 
-                          includeAttachments: e.target.checked 
-                        }))}
-                        className="rounded border-gray-300"
-                      />
-                      <span className="text-sm text-gray-700">Include attachments in PDF package</span>
-                    </label>
-                  </div>
-                </div>
-
-                {/* Field Selection */}
-                <div>
-                  <h4 className="font-medium text-gray-900 mb-3">Select Fields to Export</h4>
-                  <div className="space-y-3 max-h-80 overflow-y-auto border rounded-md p-3">
-                    {Object.entries(groupedFields).map(([category, fields]) => (
-                      <div key={category}>
-                        <div 
-                          className="flex items-center justify-between cursor-pointer py-1"
-                          onClick={() => toggleCategory(category)}
-                        >
-                          <h5 className="font-medium text-sm text-gray-800">
-                            {categoryLabels[category as keyof typeof categoryLabels]}
-                          </h5>
-                          <div className="flex items-center space-x-2">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleCategoryFields(category);
-                              }}
-                              className="text-xs text-blue-600 hover:text-blue-800"
-                            >
-                              {fields.every(f => exportOptions.selectedFields.includes(f.key)) 
-                                ? 'Deselect All' : 'Select All'}
-                            </button>
-                            <span className="text-xs text-gray-500">
-                              ({fields.filter(f => exportOptions.selectedFields.includes(f.key)).length}/{fields.length})
-                            </span>
-                          </div>
-                        </div>
-                        
-                        {expandedCategories.has(category) && (
-                          <div className="ml-4 space-y-1">
-                            {fields.map(field => (
-                              <label key={field.key} className="flex items-center space-x-2 cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={exportOptions.selectedFields.includes(field.key)}
-                                  onChange={() => toggleFieldSelection(field.key)}
-                                  className="rounded border-gray-300 text-blue-600"
-                                />
-                                <span className="text-sm text-gray-700">{field.label}</span>
-                              </label>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    ))}
+            <div className="overflow-y-auto" style={{ maxHeight: 'calc(95vh - 140px)' }}>
+              <div className="p-6 bg-gray-100">
+                <div className="bg-white shadow-lg rounded-lg overflow-hidden max-w-4xl mx-auto">
+                  <div className="p-6">
+                    <RfiDetailView 
+                      rfi={previewRfis[previewRfiIndex]} 
+                      hidePrintElements={true} 
+                      includeAttachmentsInPDF={true}
+                    />
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Modal Footer */}
-            <div className="flex items-center justify-between p-6 border-t bg-gray-50">
+            <div className="flex items-center justify-between p-4 border-t bg-gray-50 print:hidden">
               <div className="text-sm text-gray-600">
-                Selected: {exportOptions.selectedFields.length} fields
+                Previewing {previewRfis.length} selected RFI{previewRfis.length > 1 ? 's' : ''}
               </div>
               <div className="flex items-center space-x-3">
                 <Button
-                  onClick={() => setShowExportModal(false)}
+                  onClick={() => window.print()}
                   variant="outline"
+                  className="bg-green-50 border-green-200 hover:bg-green-100"
                 >
-                  Cancel
+                  <svg className="w-4 h-4 mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                  </svg>
+                  Print Current RFI
                 </Button>
                 <Button
-                  onClick={handleExport}
-                  disabled={exportOptions.selectedFields.length === 0 || generatingPDFs}
+                  onClick={() => setShowPreview(false)}
+                  variant="outline"
+                >
+                  Close Preview
+                </Button>
+                <Button
+                  onClick={handleExportFromPreview}
+                  disabled={previewRfis.length === 0 || generatingPDFs || exportOptions.selectedFields.length === 0}
                   className="bg-blue-600 hover:bg-blue-700"
                 >
                   <Download className="w-4 h-4 mr-2" />
-                  {generatingPDFs ? 'Exporting...' : 'Export'}
+                  {generatingPDFs ? 'Exporting...' : 'Export Selected'}
                 </Button>
               </div>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Hidden PDF Generation Element */}
-      {currentPDFRfi && (
-        <div className="fixed -top-[9999px] left-0 w-[210mm] bg-white">
-          <div ref={pdfElementRef}>
-            <RfiDetailView rfi={currentPDFRfi} />
           </div>
         </div>
       )}

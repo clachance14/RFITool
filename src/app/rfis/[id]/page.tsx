@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useRFIs } from '@/hooks/useRFIs';
-import { RfiDetailView } from '@/components/rfi/RfiDetailView';
+import { RFIWorkflowView } from '@/components/rfi/RFIWorkflowView';
 import type { RFI } from '@/lib/types';
 
 export default function RFIDetailPage() {
@@ -72,5 +72,5 @@ export default function RFIDetailPage() {
     );
   }
 
-  return <RfiDetailView rfi={rfi} />;
+  return <RFIWorkflowView rfi={rfi} />;
 } 

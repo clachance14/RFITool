@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useRFIs } from '@/hooks/useRFIs';
 import { useProjects } from '@/hooks/useProjects';
 import type { RFI, RFIStatus } from '@/lib/types';
+import { RFIStatusBadge } from '@/components/rfi/RFIStatusBadge';
 
 export function RFILog() {
   const router = useRouter();
@@ -39,14 +40,8 @@ export function RFILog() {
         return 'bg-gray-100 text-gray-800';
       case 'active':
         return 'bg-blue-100 text-blue-800';
-      case 'sent':
-        return 'bg-purple-100 text-purple-800';
-      case 'responded':
-        return 'bg-green-100 text-green-800';
       case 'closed':
-        return 'bg-gray-100 text-gray-800';
-      case 'overdue':
-        return 'bg-red-100 text-red-800';
+        return 'bg-green-100 text-green-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
@@ -97,6 +92,11 @@ export function RFILog() {
 
   const handleRowClick = (rfiId: string) => {
     router.push(`/rfis/${rfiId}`);
+  };
+
+  const handleViewFormal = (e: React.MouseEvent, rfiId: string) => {
+    e.stopPropagation();
+    window.open(`/rfis/${rfiId}/formal`, '_blank');
   };
 
   const filteredAndSortedRFIs = useMemo(() => {
@@ -212,12 +212,12 @@ export function RFILog() {
               <div className="text-sm text-gray-600">Active</div>
             </div>
             <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
-              <div className="text-2xl font-bold text-purple-600">{rfis.filter(r => r.status === 'sent').length}</div>
-              <div className="text-sm text-gray-600">Sent</div>
+              <div className="text-2xl font-bold text-green-600">{rfis.filter(r => r.status === 'closed').length}</div>
+              <div className="text-sm text-gray-600">Closed</div>
             </div>
             <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
-              <div className="text-2xl font-bold text-green-600">{rfis.filter(r => r.status === 'responded').length}</div>
-              <div className="text-sm text-gray-600">Responded</div>
+              <div className="text-2xl font-bold text-purple-600">{rfis.filter(r => r.stage === 'field_work_in_progress').length}</div>
+              <div className="text-sm text-gray-600">Field Work</div>
             </div>
           </div>
         )}
@@ -261,10 +261,7 @@ export function RFILog() {
                 <option value="all">All Statuses</option>
                 <option value="draft">Draft</option>
                 <option value="active">Active</option>
-                <option value="sent">Sent</option>
-                <option value="responded">Responded</option>
                 <option value="closed">Closed</option>
-                <option value="overdue">Overdue</option>
               </select>
             </div>
 
@@ -304,7 +301,7 @@ export function RFILog() {
               <thead className="bg-gray-50">
                 <tr>
                   <th 
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 w-1/8"
                     onClick={() => handleSort('rfi_number')}
                   >
                     <div className="flex items-center space-x-1">
@@ -313,7 +310,7 @@ export function RFILog() {
                     </div>
                   </th>
                   <th 
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 w-1/3"
                     onClick={() => handleSort('subject')}
                   >
                     <div className="flex items-center space-x-1">
@@ -322,7 +319,7 @@ export function RFILog() {
                     </div>
                   </th>
                   <th 
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 w-1/6"
                     onClick={() => handleSort('project_id')}
                   >
                     <div className="flex items-center space-x-1">
@@ -331,7 +328,7 @@ export function RFILog() {
                     </div>
                   </th>
                   <th 
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                     onClick={() => handleSort('status')}
                   >
                     <div className="flex items-center space-x-1">
@@ -340,16 +337,7 @@ export function RFILog() {
                     </div>
                   </th>
                   <th 
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                    onClick={() => handleSort('priority')}
-                  >
-                    <div className="flex items-center space-x-1">
-                      <span>Urgency</span>
-                      <SortIcon field="priority" />
-                    </div>
-                  </th>
-                  <th 
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                     onClick={() => handleSort('created_at')}
                   >
                     <div className="flex items-center space-x-1">
@@ -357,22 +345,10 @@ export function RFILog() {
                       <SortIcon field="created_at" />
                     </div>
                   </th>
-                  <th 
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                    onClick={() => handleSort('assigned_to')}
-                  >
-                    <div className="flex items-center space-x-1">
-                      <span>Assigned To</span>
-                      <SortIcon field="assigned_to" />
-                    </div>
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Attachments
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Total Cost
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
@@ -380,7 +356,7 @@ export function RFILog() {
               <tbody className="bg-white divide-y divide-gray-200">
                 {filteredAndSortedRFIs.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="px-6 py-12 text-center text-gray-500">
+                    <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
                       <div className="flex flex-col items-center">
                         <svg className="w-12 h-12 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -397,60 +373,56 @@ export function RFILog() {
                       className="hover:bg-gray-50 cursor-pointer transition-colors"
                       onClick={() => handleRowClick(rfi.id)}
                     >
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-4 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900">{rfi.rfi_number}</div>
                       </td>
-                      <td className="px-6 py-4">
-                        <div className="text-sm text-gray-900 max-w-xs truncate">{rfi.subject}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">{getProjectName(rfi.project_id)}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(rfi.status)}`}>
-                          {rfi.status.replace('_', ' ').toUpperCase()}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getUrgencyColor(rfi.priority === 'high' ? 'urgent' : 'non-urgent')}`}>
-                          {rfi.priority === 'high' ? 'URGENT' : 'NON-URGENT'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {format(new Date(rfi.created_at), 'MMM dd, yyyy')}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {rfi.assigned_to || 'Unassigned'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        <div className="flex items-center space-x-2">
-                          {rfi.attachment_files && rfi.attachment_files.length > 0 ? (
-                            <>
-                              <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                              </svg>
-                              <span className="text-gray-600">
-                                {rfi.attachment_files.length} file{rfi.attachment_files.length !== 1 ? 's' : ''}
-                              </span>
-                            </>
-                          ) : (
-                            <span className="text-gray-400">None</span>
-                          )}
+                      <td className="px-4 py-4">
+                        <div>
+                          <div className="text-sm text-gray-900 truncate max-w-sm">{rfi.subject}</div>
+                          <div className="flex items-center space-x-4 mt-1">
+                            {rfi.priority === 'high' && (
+                              <div className="flex items-center space-x-1">
+                                <svg className="w-4 h-4 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                </svg>
+                                <span className="text-xs font-medium text-red-600">URGENT</span>
+                              </div>
+                            )}
+                            {rfi.attachment_files && rfi.attachment_files.length > 0 && (
+                              <div className="flex items-center space-x-1">
+                                <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                                </svg>
+                                <span className="text-xs text-gray-500">
+                                  {rfi.attachment_files.length} file{rfi.attachment_files.length !== 1 ? 's' : ''}
+                                </span>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <td className="px-4 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900 truncate">{getProjectName(rfi.project_id)}</div>
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap">
+                        <RFIStatusBadge status={rfi.status} stage={rfi.stage} size="sm" />
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {format(new Date(rfi.created_at), 'MMM dd, yyyy')}
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
                         <span className={`font-medium ${calculateTotalCost(rfi) > 0 ? 'text-red-600' : 'text-gray-500'}`}>
                           {formatCurrency(calculateTotalCost(rfi))}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <Link 
-                          href={`/rfis/${rfi.id}`}
-                          className="text-blue-600 hover:text-blue-900 font-medium"
-                          onClick={(e) => e.stopPropagation()}
+                      <td className="px-4 py-4 whitespace-nowrap text-sm">
+                        <button
+                          onClick={(e) => handleViewFormal(e, rfi.id)}
+                          className="text-blue-600 hover:text-blue-800 font-medium"
+                          title="View formal document"
                         >
-                          View
-                        </Link>
+                          📄 Formal
+                        </button>
                       </td>
                     </tr>
                   ))

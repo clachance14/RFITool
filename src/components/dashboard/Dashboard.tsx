@@ -28,10 +28,9 @@ export function Dashboard() {
   const totalRFIs = projectRFIs.length;
   const openRFIs = projectRFIs.filter(rfi => 
     rfi.status === 'draft' || 
-    rfi.status === 'active' || 
-    rfi.status === 'sent'
+    rfi.status === 'active'
   ).length;
-  const overdueRFIs = projectRFIs.filter(rfi => rfi.status === 'overdue').length;
+  const overdueRFIs = projectRFIs.filter(rfi => rfi.stage === 'late_overdue').length;
   const newRFIsThisWeek = projectRFIs.filter(rfi => {
     const created = new Date(rfi.created_at);
     return created >= weekStart && created <= weekEnd;
@@ -43,7 +42,7 @@ export function Dashboard() {
   }).length;
 
   // Overdue RFIs
-  const overdueRFIsList = projectRFIs.filter(rfi => rfi.status === 'overdue');
+  const overdueRFIsList = projectRFIs.filter(rfi => rfi.stage === 'late_overdue');
   // Recent RFI History (last 10)
   const recentRFIs = [...projectRFIs].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 10);
 

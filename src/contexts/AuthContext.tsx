@@ -112,7 +112,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .insert({
             user_id: data.user.id,
             company_id: company.id,
-            role_id: 1, // Default admin role
+            role_id: 1, // Super admin role for first user
           })
           .select()
           .single();

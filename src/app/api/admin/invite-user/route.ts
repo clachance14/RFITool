@@ -13,8 +13,50 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get the admin client safely (only works on server side)
+    // Get the admin client
     const supabaseAdmin = getSupabaseAdmin();
+
+    // Check authentication and permissions
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader) {
+      return NextResponse.json(
+        { error: 'Authorization header required' },
+        { status: 401 }
+      );
+    }
+
+    // Extract the JWT token from the Authorization header
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
+
+    if (userError || !user) {
+      return NextResponse.json(
+        { error: 'Invalid authentication' },
+        { status: 401 }
+      );
+    }
+
+    // Get the current user's role to check permissions
+    const { data: currentUserCompany, error: companyError } = await supabaseAdmin
+      .from('company_users')
+      .select('company_id, role_id')
+      .eq('user_id', user.id)
+      .single();
+
+    if (companyError || !currentUserCompany) {
+      return NextResponse.json(
+        { error: 'Unable to determine your company' },
+        { status: 400 }
+      );
+    }
+
+    // Check if current user has permission to create users (App Owner or Super Admin)
+    if (![0, 1].includes(currentUserCompany.role_id)) {
+      return NextResponse.json(
+        { error: 'Only app owners and super admins can create new users' },
+        { status: 403 }
+      );
+    }
 
     // Send invitation email using Supabase Auth Admin API
     const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(

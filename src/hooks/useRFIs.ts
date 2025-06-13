@@ -349,10 +349,10 @@ export function useRFIs() {
         throw new Error('User not authenticated');
       }
       
-      // Get the user's company_id from the company_users table
+      // Get the user's role from the company_users table
       const { data: companyUserData, error: companyUserError } = await supabase
         .from('company_users')
-        .select('company_id')
+        .select('company_id, role_id')
         .eq('user_id', user.id)
         .maybeSingle();
       
@@ -360,14 +360,21 @@ export function useRFIs() {
         throw new Error('Unable to find user company association');
       }
 
-      // Build query with company filtering through projects table
+      // Check if user is App Owner (role_id = 0)
+      const isAppOwner = companyUserData.role_id === 0;
+
+      // Build query with optional company filtering through projects table
       let query = supabase
         .from('rfis')
         .select(`
           *,
-          projects!inner(company_id)
-        `)
-        .eq('projects.company_id', companyUserData.company_id);
+          projects!inner(company_id, project_name, client_company_name)
+        `);
+      
+      // Only apply company filtering if not App Owner
+      if (!isAppOwner) {
+        query = query.eq('projects.company_id', companyUserData.company_id);
+      }
       
       if (projectId) {
         query = query.eq('project_id', projectId);
@@ -394,6 +401,7 @@ export function useRFIs() {
             subject: rfiData.subject,
             description: rfiData.contractor_question || '',
             status: rfiData.status as any,
+            stage: rfiData.stage || null,
             priority: 'medium' as any, // Default priority
             assigned_to: rfiData.assigned_to,
             due_date: rfiData.due_date,
@@ -402,6 +410,14 @@ export function useRFIs() {
             updated_at: rfiData.updated_at,
             response: rfiData.client_response,
             response_date: rfiData.date_responded,
+            // Field work tracking
+            work_started_date: rfiData.work_started_date,
+            work_completed_date: rfiData.work_completed_date,
+            actual_labor_hours: rfiData.actual_labor_hours,
+            actual_labor_cost: rfiData.actual_labor_cost,
+            actual_material_cost: rfiData.actual_material_cost,
+            actual_equipment_cost: rfiData.actual_equipment_cost,
+            actual_total_cost: rfiData.actual_total_cost,
             attachments: attachments.map(att => att.file_name),
             attachment_files: attachments,
             cost_items: costItems,
@@ -436,10 +452,10 @@ export function useRFIs() {
         throw new Error('User not authenticated');
       }
       
-      // Get the user's company_id from the company_users table
+      // Get the user's role from the company_users table
       const { data: companyUserData, error: companyUserError } = await supabase
         .from('company_users')
-        .select('company_id')
+        .select('company_id, role_id')
         .eq('user_id', user.id)
         .maybeSingle();
       
@@ -447,16 +463,24 @@ export function useRFIs() {
         throw new Error('Unable to find user company association');
       }
 
-      // Query the specific RFI with company filtering through projects table
-      const { data, error } = await supabase
+      // Check if user is App Owner (role_id = 0)
+      const isAppOwner = companyUserData.role_id === 0;
+
+      // Build query with optional company filtering through projects table
+      let query = supabase
         .from('rfis')
         .select(`
           *,
-          projects!inner(company_id)
+          projects!inner(company_id, project_name, client_company_name)
         `)
-        .eq('id', id)
-        .eq('projects.company_id', companyUserData.company_id)
-        .single();
+        .eq('id', id);
+      
+      // Only apply company filtering if not App Owner
+      if (!isAppOwner) {
+        query = query.eq('projects.company_id', companyUserData.company_id);
+      }
+
+      const { data, error } = await query.single();
       
       if (error) {
         const message = 'Failed to fetch RFI: ' + error.message;
@@ -482,6 +506,7 @@ export function useRFIs() {
         subject: data.subject,
         description: data.contractor_question || '',
         status: data.status as any,
+        stage: data.stage || null,
         priority: 'medium' as any, // Default priority
         assigned_to: data.assigned_to,
         due_date: data.due_date,
@@ -490,6 +515,14 @@ export function useRFIs() {
         updated_at: data.updated_at,
         response: data.client_response,
         response_date: data.date_responded,
+        // Field work tracking
+        work_started_date: data.work_started_date,
+        work_completed_date: data.work_completed_date,
+        actual_labor_hours: data.actual_labor_hours,
+        actual_labor_cost: data.actual_labor_cost,
+        actual_material_cost: data.actual_material_cost,
+        actual_equipment_cost: data.actual_equipment_cost,
+        actual_total_cost: data.actual_total_cost,
         attachments: attachments.map(att => att.file_name),
         attachment_files: attachments,
         cost_items: costItems,
@@ -598,8 +631,8 @@ export function useRFIs() {
   }, [updateRFI]);
 
   const markAsOverdue = useCallback(async (id: string): Promise<RFI> => {
-    return updateRFIStatus(id, 'overdue');
-  }, [updateRFIStatus]);
+    return updateRFI(id, { stage: 'late_overdue' });
+  }, [updateRFI]);
 
   const submitResponse = useCallback(async (id: string, response: string): Promise<RFI> => {
     setLoading(true);
@@ -608,7 +641,7 @@ export function useRFIs() {
       const updatedRFI = await updateRFI(id, {
         response,
         response_date: new Date().toISOString(),
-        status: 'responded',
+        stage: 'response_received',
       });
       return updatedRFI;
     } catch (err) {
@@ -664,7 +697,7 @@ export function useRFIs() {
   }, [rfis]);
 
   const getOverdueRFIs = useCallback((): RFI[] => {
-    return rfis.filter(rfi => rfi.status === 'overdue' as RFIStatus);
+    return rfis.filter(rfi => rfi.stage === 'late_overdue');
   }, [rfis]);
 
   // Memoized values

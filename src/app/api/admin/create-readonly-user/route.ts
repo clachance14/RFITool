@@ -50,8 +50,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if current user has admin permissions (role_id 1 or 2)
-    if (![1, 2].includes(currentUserCompany.role_id)) {
+    // Check if current user has admin permissions (role_id 0, 1, or 2)
+    // App Owner, Super Admin, and Admin can create readonly users
+    if (![0, 1, 2].includes(currentUserCompany.role_id)) {
       return NextResponse.json(
         { error: 'Insufficient permissions to create users' },
         { status: 403 }

@@ -4,10 +4,11 @@ import { supabase } from '@/lib/supabase';
 
 // User role mapping from role_id to role string
 const ROLE_MAPPING = {
-  1: 'owner',    // Company owner/creator
-  2: 'admin',    // Admin
-  3: 'rfi_user', // Regular RFI user
-  4: 'view_only', // View only user
+  0: 'app_owner',     // App owner - sees all companies (system admin)
+  1: 'super_admin',   // Company super admin - first user, can manage company
+  2: 'admin',         // Admin - manages own projects only
+  3: 'rfi_user',      // Regular RFI user
+  4: 'view_only',     // View only user
   5: 'client_collaborator' // Client user
 } as const;
 
@@ -37,7 +38,10 @@ export function useUserRole(): UserRoleData {
       }
 
       try {
-        // Get user's role from company_users table
+        // Check for role preview mode (App Owner only)
+        const previewRole = typeof window !== 'undefined' ? localStorage.getItem('role_preview_mode') : null;
+        
+        // Get user's actual role from company_users table
         const { data: companyUser, error } = await supabase
           .from('company_users')
           .select('role_id')
@@ -48,8 +52,14 @@ export function useUserRole(): UserRoleData {
           console.error('Error fetching user role:', error);
           setRole(null);
         } else if (companyUser) {
-          const userRole = ROLE_MAPPING[companyUser.role_id as keyof typeof ROLE_MAPPING];
-          setRole(userRole || null);
+          const actualRole = ROLE_MAPPING[companyUser.role_id as keyof typeof ROLE_MAPPING];
+          
+          // If in preview mode and user is App Owner, use preview role
+          if (previewRole && actualRole === 'app_owner') {
+            setRole(previewRole as UserRole);
+          } else {
+            setRole(actualRole || null);
+          }
         }
       } catch (error) {
         console.error('Error in fetchUserRole:', error);
@@ -68,15 +78,15 @@ export function useUserRole(): UserRoleData {
 
     switch (permission) {
       case 'create_rfi':
-        return ['owner', 'admin', 'rfi_user'].includes(role);
+        return ['app_owner', 'super_admin', 'admin', 'rfi_user'].includes(role);
       case 'edit_rfi':
-        return ['owner', 'admin', 'rfi_user'].includes(role);
+        return ['app_owner', 'super_admin', 'admin', 'rfi_user'].includes(role);
       case 'create_project':
-        return ['owner', 'admin'].includes(role);
+        return ['app_owner', 'super_admin', 'admin'].includes(role);
       case 'edit_project':
-        return ['owner', 'admin'].includes(role);
+        return ['app_owner', 'super_admin', 'admin'].includes(role);
       case 'access_admin':
-        return ['owner', 'admin'].includes(role);
+        return ['app_owner', 'super_admin', 'admin'].includes(role);
       case 'view_rfis':
         return true; // All authenticated users can view RFIs
       case 'view_projects':
@@ -84,23 +94,47 @@ export function useUserRole(): UserRoleData {
       case 'view_reports':
         return true; // All authenticated users can view reports
       
-      // RFI Workflow permissions (restricted for demo users)
+      // RFI Workflow permissions
       case 'generate_client_link':
-        return ['owner', 'admin', 'rfi_user'].includes(role);
+        return ['app_owner', 'super_admin', 'admin', 'rfi_user'].includes(role);
       case 'print_rfi':
-        return ['owner', 'admin', 'rfi_user'].includes(role);
+        return ['app_owner', 'super_admin', 'admin', 'rfi_user'].includes(role);
       case 'print_package':
-        return ['owner', 'admin', 'rfi_user'].includes(role);
+        return ['app_owner', 'super_admin', 'admin', 'rfi_user'].includes(role);
       case 'submit_rfi':
-        return ['owner', 'admin', 'rfi_user'].includes(role);
+        return ['app_owner', 'super_admin', 'admin', 'rfi_user'].includes(role);
       case 'respond_to_rfi':
-        return ['owner', 'admin', 'rfi_user', 'client_collaborator'].includes(role);
+        return ['app_owner', 'super_admin', 'admin', 'rfi_user', 'client_collaborator'].includes(role);
       case 'close_rfi':
-        return ['owner', 'admin', 'rfi_user'].includes(role);
+        return ['app_owner', 'super_admin', 'admin', 'rfi_user'].includes(role);
       case 'delete_rfi':
-        return ['owner', 'admin'].includes(role);
+        return ['app_owner', 'super_admin', 'admin'].includes(role);
       case 'export_data':
-        return ['owner', 'admin'].includes(role);
+        return ['app_owner', 'super_admin', 'admin'].includes(role);
+      
+      // User Management permissions - Updated for safety
+      case 'create_user':
+        return ['app_owner', 'super_admin'].includes(role); // Super admin can add users
+      case 'invite_user':
+        return ['app_owner', 'super_admin'].includes(role); // Super admin can invite users
+      case 'view_users':
+        return ['app_owner', 'super_admin'].includes(role); // Super admin can view users
+      case 'edit_user_roles':
+        return ['app_owner'].includes(role); // Only app owner can edit roles
+      case 'delete_user':
+        return ['app_owner'].includes(role); // Only app owner can delete users
+      case 'create_readonly_user':
+        return ['app_owner', 'super_admin', 'admin'].includes(role);
+      
+      // Project Management permissions - Updated for safety
+      case 'delete_project':
+        return ['app_owner'].includes(role); // Only app owner can delete any project
+      case 'delete_own_project':
+        return ['app_owner', 'super_admin', 'admin'].includes(role); // Can delete own projects
+      
+      // Company Management
+      case 'edit_company_settings':
+        return ['app_owner', 'super_admin'].includes(role);
       
       default:
         return false;
