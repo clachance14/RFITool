@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useRFIs } from '@/hooks/useRFIs';
 import { useProjects } from '@/hooks/useProjects';
+import { useUserRole } from '@/hooks/useUserRole';
 import type { RFI, RFIStatus } from '@/lib/types';
 import { RFIStatusBadge } from '@/components/rfi/RFIStatusBadge';
 
@@ -13,18 +14,31 @@ export function RFILog() {
   const router = useRouter();
   const { rfis, getRFIs, loading } = useRFIs();
   const { projects, refetch } = useProjects();
+  const { role } = useUserRole();
   const [sortField, setSortField] = useState<keyof RFI>('created_at');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [statusFilter, setStatusFilter] = useState<RFIStatus | 'all'>('all');
   const [projectFilter, setProjectFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Detect if user is a client
+  const isClientUser = role === 'client_collaborator';
 
   useEffect(() => {
     const loadData = async () => {
-      await Promise.all([
-        getRFIs(),
-        refetch()
-      ]);
+      try {
+        await Promise.all([
+          getRFIs(),
+          refetch()
+        ]);
+      } catch (error) {
+        console.error('Error loading RFI Log data:', error);
+        // Handle the specific company association error
+        if (error instanceof Error && error.message.includes('No company association found')) {
+          // Show user-friendly error message but don't crash the component
+          alert('Account setup incomplete. Please contact your administrator to set up your company association.');
+        }
+      }
     };
     loadData();
   }, [getRFIs, refetch]);
@@ -91,7 +105,12 @@ export function RFILog() {
   };
 
   const handleRowClick = (rfiId: string) => {
-    router.push(`/rfis/${rfiId}`);
+    // Direct clients to formal view, others to workflow view
+    if (isClientUser) {
+      router.push(`/rfis/${rfiId}/formal`);
+    } else {
+      router.push(`/rfis/${rfiId}`);
+    }
   };
 
   const handleViewFormal = (e: React.MouseEvent, rfiId: string) => {

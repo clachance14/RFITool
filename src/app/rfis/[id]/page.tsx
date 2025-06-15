@@ -4,15 +4,21 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useRFIs } from '@/hooks/useRFIs';
 import { RFIWorkflowView } from '@/components/rfi/RFIWorkflowView';
+import { RFIFormalView } from '@/components/rfi/RFIFormalView';
+import { useUserRole } from '@/hooks/useUserRole';
 import type { RFI } from '@/lib/types';
 
 export default function RFIDetailPage() {
   const params = useParams();
   const { getRFIById, loading, error } = useRFIs();
+  const { role, loading: roleLoading } = useUserRole();
   const [rfi, setRfi] = useState<RFI | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   const rfiId = params.id as string;
+  
+  // Detect if user is a client
+  const isClientUser = role === 'client_collaborator';
 
   useEffect(() => {
     const fetchRFI = async () => {
@@ -31,7 +37,7 @@ export default function RFIDetailPage() {
     fetchRFI();
   }, [rfiId, getRFIById]);
 
-  if (loading) {
+  if (loading || roleLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
@@ -72,5 +78,10 @@ export default function RFIDetailPage() {
     );
   }
 
+  // Show client view for client users, workflow view for all others
+  if (isClientUser) {
+    return <RFIFormalView rfi={rfi} isClientView={true} />;
+  }
+  
   return <RFIWorkflowView rfi={rfi} />;
 } 

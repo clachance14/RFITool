@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useRFIs } from '@/hooks/useRFIs';
 import { useProjects } from '@/hooks/useProjects';
+import { useUserRole } from '@/hooks/useUserRole';
 import { Button } from '@/components/ui/button';
 import { Plus, Eye, FileText, AlertCircle, Download, Clock, User, MessageSquare, Send, CheckCircle } from 'lucide-react';
 import { PermissionGate } from '@/components/PermissionGate';
@@ -28,7 +29,11 @@ export default function RFIsPage() {
   const router = useRouter();
   const { rfis, getRFIs, loading, error } = useRFIs();
   const { projects, refetch } = useProjects();
+  const { role } = useUserRole();
   const [loadingData, setLoadingData] = useState(true);
+  
+  // Detect if user is a client
+  const isClientUser = role === 'client_collaborator';
 
   useEffect(() => {
     const loadData = async () => {
@@ -69,7 +74,12 @@ export default function RFIsPage() {
   };
 
   const handleRowClick = (rfiId: string) => {
-    router.push(`/rfis/${rfiId}`);
+    // Direct clients to formal view, others to workflow view
+    if (isClientUser) {
+      router.push(`/rfis/${rfiId}/formal`);
+    } else {
+      router.push(`/rfis/${rfiId}`);
+    }
   };
 
   // Generate activity timeline from RFI data
@@ -336,7 +346,7 @@ export default function RFIsPage() {
                       <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-2">
                           <Link 
-                            href={`/rfis/${activity.rfi_id}`}
+                            href={isClientUser ? `/rfis/${activity.rfi_id}/formal` : `/rfis/${activity.rfi_id}`}
                             className="text-sm font-medium text-blue-600 hover:text-blue-800"
                           >
                             {activity.rfi_number}

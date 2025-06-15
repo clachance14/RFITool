@@ -50,10 +50,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if current user has permission to create users (App Owner or Super Admin)
-    if (![0, 1].includes(currentUserCompany.role_id)) {
+    // Check if current user has permission to create users (App Owner, Super Admin, or Admin)
+    if (![0, 1, 2].includes(currentUserCompany.role_id)) {
       return NextResponse.json(
-        { error: 'Only app owners and super admins can create new users' },
+        { error: 'Only app owners, super admins, and admins can create new users' },
         { status: 403 }
       );
     }
@@ -107,13 +107,79 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Create company_users record to link user to company
+    const { data: companyUserData, error: companyUserError } = await supabaseAdmin
+      .from('company_users')
+      .insert({
+        user_id: inviteData.user.id,
+        company_id: companyId,
+        role_id: roleId
+      })
+      .select()
+      .single();
+
+    if (companyUserError) {
+      console.error('Error linking user to company:', companyUserError);
+      console.error('Failed company link details:', {
+        user_id: inviteData.user.id,
+        company_id: companyId,
+        role_id: roleId,
+        email: email.trim().toLowerCase()
+      });
+      
+      // Rollback: Clean up the user record if company linking fails
+      try {
+        await supabaseAdmin.from('users').delete().eq('id', inviteData.user.id);
+        await supabaseAdmin.auth.admin.deleteUser(inviteData.user.id);
+        console.log('Successfully rolled back user creation due to company linking failure');
+      } catch (rollbackError) {
+        console.error('Failed to rollback user creation:', rollbackError);
+      }
+      
+      return NextResponse.json(
+        { error: 'User creation failed: Unable to link user to company. ' + companyUserError.message },
+        { status: 400 }
+      );
+    }
+
+    // Verify the company association was created successfully
+    const { data: verifyAssociation, error: verifyError } = await supabaseAdmin
+      .from('company_users')
+      .select('user_id, company_id, role_id')
+      .eq('user_id', inviteData.user.id)
+      .single();
+
+    if (verifyError || !verifyAssociation) {
+      console.error('Company association verification failed:', verifyError);
+      console.error('Association verification details:', {
+        user_id: inviteData.user.id,
+        expected_company_id: companyId,
+        expected_role_id: roleId
+      });
+      
+      return NextResponse.json(
+        { error: 'User created but company association could not be verified. Please contact support.' },
+        { status: 500 }
+      );
+    }
+
+    console.log('User invitation completed successfully:', {
+      user_id: inviteData.user.id,
+      email: email.trim().toLowerCase(),
+      full_name: fullName.trim(),
+      company_id: companyId,
+      role_id: roleId,
+      role_name: roleId === 5 ? 'client_collaborator' : 'other'
+    });
+
     return NextResponse.json({
       success: true,
       user: {
         id: inviteData.user.id,
         email: email.trim().toLowerCase(),
         full_name: fullName.trim(),
-        status: 'invited'
+        status: 'invited',
+        role_id: roleId
       }
     });
 

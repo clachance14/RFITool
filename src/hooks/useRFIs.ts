@@ -356,8 +356,29 @@ export function useRFIs() {
         .eq('user_id', user.id)
         .maybeSingle();
       
-      if (companyUserError || !companyUserData) {
-        throw new Error('Unable to find user company association');
+      if (companyUserError) {
+        console.error('Error fetching company user data:', companyUserError);
+        throw new Error('Database error: ' + companyUserError.message);
+      }
+      
+      if (!companyUserData) {
+        console.error('No company association found for user:', {
+          userId: user.id,
+          userEmail: user.email
+        });
+        
+        // Special handling for client users - check if they are trying to access via client session
+        const isClientSession = typeof window !== 'undefined' && 
+          (sessionStorage.getItem('client_session') || sessionStorage.getItem('client_token'));
+        
+        if (isClientSession) {
+          // For client sessions, we can allow limited access but with no data
+          console.log('Client session detected, allowing limited access with empty data');
+          setRFIs([]);
+          return [];
+        }
+        
+        throw new Error('No company association found. Please contact your administrator to set up your account properly.');
       }
 
       // Check if user is App Owner (role_id = 0)
@@ -459,8 +480,17 @@ export function useRFIs() {
         .eq('user_id', user.id)
         .maybeSingle();
       
-      if (companyUserError || !companyUserData) {
-        throw new Error('Unable to find user company association');
+      if (companyUserError) {
+        console.error('Error fetching company user data:', companyUserError);
+        throw new Error('Database error: ' + companyUserError.message);
+      }
+      
+      if (!companyUserData) {
+        console.error('No company association found for user:', {
+          userId: user.id,
+          userEmail: user.email
+        });
+        throw new Error('No company association found. Please contact your administrator to set up your account properly.');
       }
 
       // Check if user is App Owner (role_id = 0)

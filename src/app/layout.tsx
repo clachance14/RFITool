@@ -4,6 +4,7 @@ import { Toaster } from 'react-hot-toast'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { RFIProvider } from '@/contexts/RFIContext'
 import LayoutWrapper from '@/components/LayoutWrapper'
+import AuthGuard from '@/components/AuthGuard'
 
 export const metadata: Metadata = {
   title: {
@@ -22,12 +23,14 @@ export default function RootLayout({
     <html lang="en">
       <body className="min-h-screen bg-gray-50">
         <AuthProvider>
-          <RFIProvider>
-            <LayoutWrapper>
-              {children}
-            </LayoutWrapper>
-            <Toaster position="top-right" />
-          </RFIProvider>
+          <AuthGuard>
+            <RFIProvider>
+              <LayoutWrapper>
+                {children}
+              </LayoutWrapper>
+              <Toaster position="top-right" />
+            </RFIProvider>
+          </AuthGuard>
         </AuthProvider>
       </body>
     </html>

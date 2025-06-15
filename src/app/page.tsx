@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProjects } from '@/hooks/useProjects';
 import { useRFIs } from '@/hooks/useRFIs';
@@ -10,19 +9,10 @@ import Link from 'next/link';
 import { PermissionGate } from '@/components/PermissionGate';
 
 export default function HomePage() {
-  const router = useRouter();
-  const { user, loading: authLoading } = useAuth();
+  const { user } = useAuth();
   const { projects, refetch: getProjects } = useProjects();
   const { rfis, getRFIs } = useRFIs();
   const [loading, setLoading] = useState(true);
-
-  // Redirect unauthenticated users to login page
-  useEffect(() => {
-    if (!authLoading && !user) {
-      router.replace('/login');
-      return;
-    }
-  }, [user, authLoading, router]);
 
   useEffect(() => {
     // Only load data if user is authenticated
@@ -44,8 +34,8 @@ export default function HomePage() {
     loadData();
   }, [getProjects, getRFIs, user]);
 
-  // Show loading while authenticating or redirecting
-  if (authLoading || !user || loading) {
+  // Show loading while data is being fetched
+  if (loading) {
     return (
       <div className="p-6">
         <div className="max-w-7xl mx-auto">

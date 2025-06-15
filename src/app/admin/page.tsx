@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { Upload, X, Eye, Settings, Users, Mail, Cog, FileText, Shield, Plus, Edit, Trash2, Download } from 'lucide-react';
+import { Upload, X, Eye, Settings, Users, Mail, Cog, FileText, Plus, Edit, Trash2, Download } from 'lucide-react';
 import { AdminProjectSection } from '@/components/project/AdminProjectSection';
 import { ExportSection } from '@/components/admin/ExportSection';
 import { CreateReadOnlyUser } from '@/components/admin/CreateReadOnlyUser';
 import { NotificationCenter } from '@/components/admin/NotificationCenter';
-import { RolePreviewSection } from '@/components/admin/RolePreviewSection';
+
+import { ClientAssignmentsTable } from '@/components/admin/ClientAssignmentsTable';
 import { PermissionGate } from '@/components/PermissionGate';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
@@ -91,11 +92,39 @@ export default function AdminPage() {
   const [usersLoading, setUsersLoading] = useState(true);
   const [showAddUser, setShowAddUser] = useState(false);
   const [editingUser, setEditingUser] = useState<string | null>(null);
+  const [companies, setCompanies] = useState<any[]>([]);
+  const [companiesLoading, setCompaniesLoading] = useState(false);
+  const [currentUserCompanyId, setCurrentUserCompanyId] = useState<string | null>(null);
   const [newUser, setNewUser] = useState({
     name: '',
     email: '',
-    role: 'rfi_user'
+    role: 'rfi_user',
+    companyId: ''
   });
+
+  // Fetch companies for company selection
+  const fetchCompanies = useCallback(async () => {
+    try {
+      setCompaniesLoading(true);
+      
+      // Get all companies (App Owners can see all, others see only their own)
+      const { data: companyData, error: companyError } = await supabase
+        .from('companies')
+        .select('id, name')
+        .order('name');
+
+      if (companyError) {
+        console.error('Error fetching companies:', companyError);
+        return;
+      }
+
+      setCompanies(companyData || []);
+    } catch (error) {
+      console.error('Error fetching companies:', error);
+    } finally {
+      setCompaniesLoading(false);
+    }
+  }, []);
 
   // Fetch users from database
   useEffect(() => {
@@ -116,6 +145,12 @@ export default function AdminPage() {
           console.error('Error fetching user company:', companyError);
           return;
         }
+
+        // Set current user's company ID for the form default
+        setCurrentUserCompanyId(currentUserCompany.company_id);
+
+        // Also fetch companies when we fetch users
+        fetchCompanies();
 
         // First get company users with their role information
         const { data: companyUsers, error: companyUsersError } = await supabase
@@ -208,7 +243,7 @@ export default function AdminPage() {
     };
 
     fetchUsers();
-  }, [session?.user?.id]);
+  }, [session?.user?.id, fetchCompanies]);
 
   // System settings state
   const [rfiNumberFormat, setRfiNumberFormat] = useState('RFI-{YYYY}-{####}');
@@ -354,33 +389,27 @@ export default function AdminPage() {
   };
 
   const handleAddUser = async () => {
-    if (!newUser.name.trim() || !newUser.email.trim()) {
-      alert('Please fill in all required fields');
+    console.log('=== ADD USER DEBUG ===');
+    console.log('User data:', newUser);
+    console.log('Session:', session?.user?.email);
+    
+    if (!newUser.name.trim() || !newUser.email.trim() || !newUser.companyId.trim()) {
+      alert('Please fill in all required fields including company selection');
       return;
     }
 
-    // Check if email already exists in current company
-    if (users.some((u: any) => u.email.toLowerCase() === newUser.email.toLowerCase())) {
-      alert('A user with this email already exists in your company');
+    // Check if email already exists in the selected company
+    const usersInSelectedCompany = await getUsersInCompany(newUser.companyId);
+    if (usersInSelectedCompany?.some((u: any) => u.email.toLowerCase() === newUser.email.toLowerCase())) {
+      alert('A user with this email already exists in the selected company');
       return;
     }
 
     try {
-      // Get current user's company
-      const { data: currentUserCompany, error: companyError } = await supabase
-        .from('company_users')
-        .select('company_id')
-        .eq('user_id', session?.user?.id)
-        .single();
-
-      if (companyError || !currentUserCompany) {
-        console.error('Company lookup failed:', companyError);
-        alert('Unable to determine your company. Please try again.');
-        return;
-      }
-
       // Find the role_id for the selected role first
       const roleId = Object.entries(ROLE_MAPPING).find(([id, role]) => role === newUser.role)?.[0];
+      
+      console.log('Role mapping:', { role: newUser.role, roleId, ROLE_MAPPING });
       
       if (!roleId) {
         alert('Invalid role selected');
@@ -397,25 +426,34 @@ export default function AdminPage() {
         .single();
 
       if (existingUser) {
-        // User exists, just add them to the company
+        // User exists, just add them to the selected company
+        console.log('Existing user found:', existingUser);
         userId = existingUser.id;
       } else {
+        console.log('No existing user found, sending invitation...');
         // Send invitation via API route
+        const invitePayload = {
+          email: newUser.email.trim().toLowerCase(),
+          fullName: newUser.name.trim(),
+          companyId: newUser.companyId, // Use selected company
+          roleId: parseInt(roleId),
+          invitedBy: session?.user?.email || 'system'
+        };
+        
+        console.log('Sending invitation with payload:', invitePayload);
+        
         const response = await fetch('/api/admin/invite-user', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token}`,
           },
-          body: JSON.stringify({
-            email: newUser.email.trim().toLowerCase(),
-            fullName: newUser.name.trim(),
-            companyId: currentUserCompany.company_id,
-            roleId: parseInt(roleId),
-            invitedBy: session?.user?.email || 'system'
-          }),
+          body: JSON.stringify(invitePayload),
         });
 
         const result = await response.json();
+
+        console.log('Invitation API response:', { status: response.status, result });
 
         if (!response.ok) {
           console.error('Error sending invitation:', result.error);
@@ -430,21 +468,6 @@ export default function AdminPage() {
 
         userId = result.user.id;
         isNewUser = true;
-      }
-
-      // Add user to company
-      const { error: companyUserError } = await supabase
-        .from('company_users')
-        .insert({
-          user_id: userId,
-          company_id: currentUserCompany.company_id,
-          role_id: parseInt(roleId)
-        });
-
-      if (companyUserError) {
-        console.error('Error adding user to company:', companyUserError);
-        alert('Failed to add user to company: ' + companyUserError.message);
-        return;
       }
 
       // Add to local state
@@ -463,13 +486,14 @@ export default function AdminPage() {
       setUsers([...users, user]);
       
       // Reset form and close modal
-      setNewUser({ name: '', email: '', role: 'rfi_user' });
+      setNewUser({ name: '', email: '', role: 'rfi_user', companyId: '' });
       setShowAddUser(false);
       
+      const selectedCompany = companies.find(c => c.id === newUser.companyId);
       if (isNewUser) {
-        alert(`Invitation sent to ${user.name} (${user.email})!\n\nThey will receive an email with instructions to set up their account and can then log in with full access.`);
+        alert(`Invitation sent to ${user.name} (${user.email}) for ${selectedCompany?.name || 'selected company'}!\n\nThey will receive an email with instructions to set up their account and can then log in with full access.`);
       } else {
-        alert(`User ${user.name} added to your company successfully!`);
+        alert(`User ${user.name} added to ${selectedCompany?.name || 'selected company'} successfully!`);
       }
     } catch (error) {
       console.error('Error adding user:', error);
@@ -477,9 +501,415 @@ export default function AdminPage() {
     }
   };
 
+  // Helper function to get users in a specific company
+  const getUsersInCompany = async (companyId: string) => {
+    try {
+      const { data: companyUsers, error } = await supabase
+        .from('company_users')
+        .select(`
+          user_id,
+          users!inner(email, full_name)
+        `)
+        .eq('company_id', companyId);
+
+      if (error) {
+        console.error('Error fetching company users:', error);
+        return [];
+      }
+
+      return companyUsers?.map(cu => ({
+        id: cu.user_id,
+        email: (cu.users as any).email,
+        full_name: (cu.users as any).full_name
+      })) || [];
+    } catch (error) {
+      console.error('Error in getUsersInCompany:', error);
+      return [];
+    }
+  };
+
   const handleCancelAddUser = () => {
-    setNewUser({ name: '', email: '', role: 'rfi_user' });
+    setNewUser({ name: '', email: '', role: 'rfi_user', companyId: '' });
     setShowAddUser(false);
+  };
+
+  // Function to open add user modal with default company
+  const handleOpenAddUser = () => {
+    setNewUser({ 
+      name: '', 
+      email: '', 
+      role: 'rfi_user', 
+      companyId: '' // Don't auto-default to current user's company
+    });
+    setShowAddUser(true);
+  };
+
+  // Debug function to check user company associations
+  const checkUserAssociations = async () => {
+    try {
+      // Get current user's company
+      const { data: currentUserCompany, error: currentCompanyError } = await supabase
+        .from('company_users')
+        .select('company_id')
+        .eq('user_id', session?.user?.id)
+        .single();
+
+      if (currentCompanyError || !currentUserCompany) {
+        alert('Unable to determine your company. Please try again.');
+        return;
+      }
+
+      // Get all users
+      const { data: users, error: usersError } = await supabase
+        .from('users')
+        .select('id, email, full_name');
+
+      if (usersError) {
+        console.error('Error fetching users:', usersError);
+        return;
+      }
+
+      // Get all company associations with company names
+      const { data: companyUsers, error: companyUsersError } = await supabase
+        .from('company_users')
+        .select(`
+          user_id, 
+          company_id, 
+          role_id,
+          companies!inner(name)
+        `);
+
+      if (companyUsersError) {
+        console.error('Error fetching company users:', companyUsersError);
+        return;
+      }
+
+      // Find users without company associations
+      const usersWithoutCompany = users?.filter(user => 
+        !companyUsers?.find(cu => cu.user_id === user.id)
+      );
+
+      // Find users in your company
+      const usersInYourCompany = companyUsers?.filter(cu => 
+        cu.company_id === currentUserCompany.company_id
+      );
+
+      // Find users in other companies
+      const usersInOtherCompanies = companyUsers?.filter(cu => 
+        cu.company_id !== currentUserCompany.company_id
+      );
+
+      console.log('=== USER ASSOCIATION DEBUG ===');
+      console.log('Your company ID:', currentUserCompany.company_id);
+      console.log('Users without company associations:', usersWithoutCompany);
+      console.log('Users in your company:', usersInYourCompany);
+      console.log('Users in other companies:', usersInOtherCompanies);
+
+      let debugMessage = `=== USER ASSOCIATION DEBUG ===\n\n`;
+      debugMessage += `Your Company ID: ${currentUserCompany.company_id}\n\n`;
+      
+      debugMessage += `Users in YOUR company (${usersInYourCompany?.length || 0}):\n`;
+      usersInYourCompany?.forEach(cu => {
+        const user = users?.find(u => u.id === cu.user_id);
+        const roleName = ROLE_MAPPING[cu.role_id as keyof typeof ROLE_MAPPING] || 'unknown';
+        debugMessage += `  • ${user?.full_name || user?.email || 'Unknown'} (${user?.email}) - Role: ${roleName}\n`;
+      });
+
+      if (usersWithoutCompany && usersWithoutCompany.length > 0) {
+        debugMessage += `\nUsers WITHOUT company associations (${usersWithoutCompany.length}):\n`;
+        usersWithoutCompany.forEach(user => {
+          debugMessage += `  • ${user.full_name || user.email} (${user.email})\n`;
+        });
+      }
+
+      if (usersInOtherCompanies && usersInOtherCompanies.length > 0) {
+        debugMessage += `\nUsers in OTHER companies (${usersInOtherCompanies.length}):\n`;
+        usersInOtherCompanies.forEach(cu => {
+          const user = users?.find(u => u.id === cu.user_id);
+          const roleName = ROLE_MAPPING[cu.role_id as keyof typeof ROLE_MAPPING] || 'unknown';
+          const companyName = (cu.companies as any)?.name || 'Unknown Company';
+          debugMessage += `  • ${user?.full_name || user?.email || 'Unknown'} (${user?.email}) - Company: ${companyName} - Role: ${roleName}\n`;
+        });
+      }
+
+      alert(debugMessage);
+    } catch (error) {
+      console.error('Error checking user associations:', error);
+      alert('Error checking user associations: ' + error);
+    }
+  };
+
+  // Function to fix users without company associations
+  const fixUserAssociations = async () => {
+    try {
+      // Get current user's company
+      const { data: currentUserCompany, error: companyError } = await supabase
+        .from('company_users')
+        .select('company_id')
+        .eq('user_id', session?.user?.id)
+        .single();
+
+      if (companyError || !currentUserCompany) {
+        alert('Unable to determine your company. Please try again.');
+        return;
+      }
+
+      // Get all users
+      const { data: users, error: usersError } = await supabase
+        .from('users')
+        .select('id, email, full_name');
+
+      if (usersError) {
+        console.error('Error fetching users:', usersError);
+        return;
+      }
+
+      // Get all company associations
+      const { data: companyUsers, error: companyUsersError } = await supabase
+        .from('company_users')
+        .select('user_id, company_id, role_id');
+
+      if (companyUsersError) {
+        console.error('Error fetching company users:', companyUsersError);
+        return;
+      }
+
+      // Find users without company associations
+      const usersWithoutCompany = users?.filter(user => 
+        !companyUsers?.find(cu => cu.user_id === user.id)
+      );
+
+      if (!usersWithoutCompany || usersWithoutCompany.length === 0) {
+        alert('No users found without company associations.');
+        return;
+      }
+
+      // Ask for confirmation
+      const confirmed = confirm(
+        `Fix ${usersWithoutCompany.length} users without company associations?\n\n` +
+        `Users to fix:\n${usersWithoutCompany.map(u => `${u.full_name} (${u.email})`).join('\n')}\n\n` +
+        `They will be added to your company as Client users (role_id: 5).`
+      );
+
+      if (!confirmed) return;
+
+      // Add company associations for users without them
+      const associationsToAdd = usersWithoutCompany.map(user => ({
+        user_id: user.id,
+        company_id: currentUserCompany.company_id,
+        role_id: 5 // Default to client_collaborator role
+      }));
+
+      const { error: insertError } = await supabase
+        .from('company_users')
+        .insert(associationsToAdd);
+
+      if (insertError) {
+        console.error('Error fixing user associations:', insertError);
+        alert('Error fixing user associations: ' + insertError.message);
+        return;
+      }
+
+      alert(`Successfully fixed ${usersWithoutCompany.length} user associations!`);
+      
+      // Refresh the page to reload user data
+      window.location.reload();
+    } catch (error) {
+      console.error('Error fixing user associations:', error);
+      alert('Error fixing user associations: ' + error);
+    }
+  };
+
+  // Function to find a specific user by email
+  const findUserByEmail = async () => {
+    const email = prompt('Enter the email address to search for:');
+    if (!email) return;
+
+    try {
+      // Get user from users table
+      const { data: user, error: userError } = await supabase
+        .from('users')
+        .select('id, email, full_name, status')
+        .eq('email', email.toLowerCase().trim())
+        .maybeSingle();
+
+      if (userError) {
+        console.error('Error finding user:', userError);
+        alert('Error searching for user: ' + userError.message);
+        return;
+      }
+
+      if (!user) {
+        alert(`No user found with email: ${email}`);
+        return;
+      }
+
+      // Get user's company association
+      const { data: companyUser, error: companyError } = await supabase
+        .from('company_users')
+        .select(`
+          company_id, 
+          role_id,
+          companies!inner(name)
+        `)
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      let message = `FOUND USER:\n\n`;
+      message += `Name: ${user.full_name || 'Not set'}\n`;
+      message += `Email: ${user.email}\n`;
+      message += `Status: ${user.status || 'unknown'}\n`;
+      message += `User ID: ${user.id}\n\n`;
+
+      if (companyUser) {
+        const roleName = ROLE_MAPPING[companyUser.role_id as keyof typeof ROLE_MAPPING] || 'unknown';
+        const companyName = (companyUser.companies as any)?.name || 'Unknown Company';
+        message += `Company: ${companyName} (ID: ${companyUser.company_id})\n`;
+        message += `Role: ${roleName} (ID: ${companyUser.role_id})\n`;
+      } else {
+        message += `❌ NO COMPANY ASSOCIATION FOUND!\n`;
+        message += `This user needs to be linked to a company.\n`;
+      }
+
+      alert(message);
+    } catch (error) {
+      console.error('Error finding user:', error);
+      alert('Error finding user: ' + error);
+    }
+  };
+
+  // Function to manually link a user to current company
+  const linkUserToCompany = async () => {
+    const email = prompt('Enter the email address of the user to link to your company:');
+    if (!email) return;
+
+    try {
+      // Get current user's company
+      const { data: currentUserCompany, error: companyError } = await supabase
+        .from('company_users')
+        .select('company_id')
+        .eq('user_id', session?.user?.id)
+        .single();
+
+      if (companyError || !currentUserCompany) {
+        alert('Unable to determine your company. Please try again.');
+        return;
+      }
+
+      // Get user from users table
+      const { data: user, error: userError } = await supabase
+        .from('users')
+        .select('id, email, full_name')
+        .eq('email', email.toLowerCase().trim())
+        .maybeSingle();
+
+      if (userError) {
+        alert('Error finding user: ' + userError.message);
+        return;
+      }
+
+      if (!user) {
+        alert(`No user found with email: ${email}`);
+        return;
+      }
+
+      // Check if user already has a company association
+      const { data: existingAssociation, error: existingError } = await supabase
+        .from('company_users')
+        .select('company_id, role_id')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (existingError) {
+        alert('Error checking existing association: ' + existingError.message);
+        return;
+      }
+
+      if (existingAssociation) {
+        const confirmed = confirm(
+          `User ${user.full_name || user.email} is already linked to company ID ${existingAssociation.company_id}.\n\n` +
+          `Do you want to move them to your company (ID: ${currentUserCompany.company_id})?`
+        );
+        
+        if (!confirmed) return;
+
+        // Update existing association
+        const { error: updateError } = await supabase
+          .from('company_users')
+          .update({
+            company_id: currentUserCompany.company_id,
+            role_id: 5 // Default to client role
+          })
+          .eq('user_id', user.id);
+
+        if (updateError) {
+          alert('Error updating user association: ' + updateError.message);
+          return;
+        }
+      } else {
+        // Create new association
+        const { error: insertError } = await supabase
+          .from('company_users')
+          .insert({
+            user_id: user.id,
+            company_id: currentUserCompany.company_id,
+            role_id: 5 // Default to client role
+          });
+
+        if (insertError) {
+          alert('Error linking user to company: ' + insertError.message);
+          return;
+        }
+      }
+
+      alert(`Successfully linked ${user.full_name || user.email} to your company as a Client user!`);
+      
+      // Refresh the page to reload user data
+      window.location.reload();
+    } catch (error) {
+      console.error('Error linking user to company:', error);
+      alert('Error linking user to company: ' + error);
+    }
+  };
+
+  // Function to create a new company
+  const handleCreateCompany = async (companyName: string) => {
+    try {
+      const response = await fetch('/api/admin/create-company', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({
+          name: companyName.trim()
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        console.error('Error creating company:', result.error);
+        alert('Failed to create company: ' + result.error);
+        return;
+      }
+
+      if (!result.success || !result.company) {
+        alert('Failed to create company - no company data returned');
+        return;
+      }
+
+      // Add to local companies list
+      setCompanies(prev => [...prev, result.company]);
+      
+      // Auto-select the newly created company
+      setNewUser(prev => ({ ...prev, companyId: result.company.id }));
+      
+      alert(`Company "${companyName}" created successfully!`);
+    } catch (error) {
+      console.error('Error creating company:', error);
+      alert('Failed to create company: ' + error);
+    }
   };
 
   const tabs = [
@@ -489,7 +919,7 @@ export default function AdminPage() {
     { id: 'projects', label: 'Project Settings', icon: FileText },
     { id: 'system', label: 'System Settings', icon: Cog },
     { id: 'notifications', label: 'Notifications', icon: Mail },
-    { id: 'role-preview', label: 'Role Preview', icon: Shield },
+
   ];
 
   return (
@@ -754,13 +1184,49 @@ export default function AdminPage() {
               <div className="flex items-center justify-between">
                 <h2 className="text-xl font-semibold text-gray-900">User Management</h2>
                 <div className="flex space-x-2">
+                  <Button 
+                    onClick={checkUserAssociations}
+                    className="bg-orange-600 hover:bg-orange-700"
+                  >
+                    Debug Users
+                  </Button>
+                  <Button 
+                    onClick={fixUserAssociations}
+                    className="bg-red-600 hover:bg-red-700"
+                  >
+                    Fix Users
+                  </Button>
+                  <Button 
+                    onClick={findUserByEmail}
+                    className="bg-blue-600 hover:bg-blue-700"
+                  >
+                    Find User
+                  </Button>
+                  <Button 
+                    onClick={linkUserToCompany}
+                    className="bg-green-600 hover:bg-green-700"
+                  >
+                    Link User
+                  </Button>
                   <PermissionGate permission="create_readonly_user">
                     <CreateReadOnlyUser onUserCreated={() => window.location.reload()} />
                   </PermissionGate>
                   <PermissionGate permission="create_user">
-                    <Button onClick={() => setShowAddUser(true)} className="bg-blue-600 hover:bg-blue-700">
+                    <Button onClick={handleOpenAddUser} className="bg-blue-600 hover:bg-blue-700">
                       <Plus className="h-4 w-4 mr-2" />
                       Add User
+                    </Button>
+                  </PermissionGate>
+                  <PermissionGate permission="create_user">
+                    <Button 
+                      onClick={() => {
+                        setNewUser({ ...newUser, role: 'client_collaborator' });
+                        handleOpenAddUser();
+                      }} 
+                      className="bg-orange-600 hover:bg-orange-700"
+                    >
+                      <Users className="h-4 w-4 mr-2" />
+                      Add Client
                     </Button>
                   </PermissionGate>
                 </div>
@@ -891,6 +1357,11 @@ export default function AdminPage() {
                   </table>
                 )}
               </div>
+
+              {/* Client Project Assignments Section */}
+              <div className="mt-8 border-t border-gray-200 pt-8">
+                <ClientAssignmentsTable />
+              </div>
             </div>
           )}
 
@@ -985,12 +1456,9 @@ export default function AdminPage() {
             <NotificationCenter />
           )}
 
-          {/* Role Preview Tab */}
-          {activeTab === 'role-preview' && (
-            <PermissionGate permission="edit_user_roles">
-              <RolePreviewSection />
-            </PermissionGate>
-          )}
+
+
+
 
           {/* Add User Modal */}
           {showAddUser && (
@@ -1012,9 +1480,25 @@ export default function AdminPage() {
               >
                 <div className="px-6 py-4 border-b border-gray-200">
                   <h3 className="text-lg font-semibold text-gray-900">Add New User</h3>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Invite a new user to their respective company. For client users, select their client company (not your contractor company).
+                  </p>
                 </div>
                 
                 <div className="px-6 py-4 space-y-4">
+                  {/* Helper info showing current user's company */}
+                  {currentUserCompanyId && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                      <p className="text-xs text-blue-800">
+                        💡 <strong>Your company:</strong> {companies.find(c => c.id === currentUserCompanyId)?.name || 'Loading...'}
+                        <br />
+                        <span className="text-blue-600">
+                          For client users like Joe Smith, select their client company (different from yours).
+                        </span>
+                      </p>
+                    </div>
+                  )}
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Full Name *
@@ -1040,6 +1524,48 @@ export default function AdminPage() {
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                       placeholder="Enter email address"
                     />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Company *
+                    </label>
+                    <div className="flex space-x-2">
+                      {companiesLoading ? (
+                        <div className="flex-1 px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500">
+                          Loading companies...
+                        </div>
+                      ) : (
+                        <select
+                          value={newUser.companyId}
+                          onChange={(e) => setNewUser({ ...newUser, companyId: e.target.value })}
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          required
+                        >
+                          <option value="">Select the user's company</option>
+                          {companies.map((company) => (
+                            <option key={company.id} value={company.id}>
+                              {company.name}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                      <Button
+                        type="button"
+                        onClick={() => {
+                          const companyName = prompt('Enter the name of the new company:');
+                          if (companyName?.trim()) {
+                            handleCreateCompany(companyName.trim());
+                          }
+                        }}
+                        className="bg-green-600 hover:bg-green-700 whitespace-nowrap"
+                      >
+                        + Add Company
+                      </Button>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Select the company this user belongs to. For client users, choose their client company (not your contractor company). Users will only see RFIs related to their company.
+                    </p>
                   </div>
                   
                   <div>

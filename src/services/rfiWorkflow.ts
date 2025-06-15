@@ -1,9 +1,9 @@
-import { RFIStatus } from '@/lib/types';
+import { RFIStatusLegacy } from '@/lib/types';
 import { supabase, handleSupabaseError } from '@/lib/supabase';
 
 export interface RFIWorkflowTransition {
-  from: RFIStatus;
-  to: RFIStatus;
+  from: RFIStatusLegacy;
+  to: RFIStatusLegacy;
   label: string;
   description: string;
   icon: string;
@@ -13,7 +13,7 @@ export interface RFIWorkflowTransition {
 }
 
 export interface RFIWorkflowState {
-  status: RFIStatus;
+  status: RFIStatusLegacy;
   label: string;
   description: string;
   color: string;
@@ -22,7 +22,7 @@ export interface RFIWorkflowState {
 }
 
 // Define the RFI workflow states
-export const RFI_WORKFLOW_STATES: Record<RFIStatus, RFIWorkflowState> = {
+export const RFI_WORKFLOW_STATES: Record<RFIStatusLegacy, RFIWorkflowState> = {
   draft: {
     status: 'draft',
     label: 'Draft',
@@ -260,14 +260,14 @@ export class RFIWorkflowService {
   /**
    * Get available transitions for a given RFI status
    */
-  static getAvailableTransitions(currentStatus: RFIStatus): RFIWorkflowTransition[] {
+  static getAvailableTransitions(currentStatus: RFIStatusLegacy): RFIWorkflowTransition[] {
     return RFI_WORKFLOW_TRANSITIONS.filter(transition => transition.from === currentStatus);
   }
 
   /**
    * Check if a status transition is valid
    */
-  static isValidTransition(from: RFIStatus, to: RFIStatus): boolean {
+  static isValidTransition(from: RFIStatusLegacy, to: RFIStatusLegacy): boolean {
     return RFI_WORKFLOW_TRANSITIONS.some(transition => 
       transition.from === from && transition.to === to
     );
@@ -276,7 +276,7 @@ export class RFIWorkflowService {
   /**
    * Get workflow state information for a status
    */
-  static getWorkflowState(status: RFIStatus): RFIWorkflowState {
+  static getWorkflowState(status: RFIStatusLegacy): RFIWorkflowState {
     return RFI_WORKFLOW_STATES[status];
   }
 
@@ -285,8 +285,8 @@ export class RFIWorkflowService {
    */
   static async validateRFIForTransition(
     rfiId: string, 
-    targetStatus: RFIStatus, 
-    currentStatus: RFIStatus
+    targetStatus: RFIStatusLegacy, 
+    currentStatus: RFIStatusLegacy
   ): Promise<{ valid: boolean; errors: string[] }> {
     const errors: string[] = [];
     const transition = RFI_WORKFLOW_TRANSITIONS.find(t => 
@@ -347,8 +347,8 @@ export class RFIWorkflowService {
    */
   static async executeTransition(
     rfiId: string,
-    targetStatus: RFIStatus,
-    currentStatus: RFIStatus,
+    targetStatus: RFIStatusLegacy,
+    currentStatus: RFIStatusLegacy,
     userId: string,
     additionalData?: Record<string, any>
   ): Promise<{ success: boolean; error?: string; data?: any }> {
@@ -428,8 +428,8 @@ export class RFIWorkflowService {
    */
   private static async logStatusTransition(
     rfiId: string,
-    fromStatus: RFIStatus,
-    toStatus: RFIStatus,
+    fromStatus: RFIStatusLegacy,
+    toStatus: RFIStatusLegacy,
     userId: string
   ): Promise<void> {
     try {

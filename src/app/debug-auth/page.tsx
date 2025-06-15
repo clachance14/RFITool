@@ -87,7 +87,7 @@ export default function DebugAuthPage() {
 
   const forceOwnerMode = () => {
     // Clear client data specifically
-    ['client_session', 'client_token', 'role_preview_mode'].forEach(key => {
+    ['client_session', 'client_token'].forEach(key => {
       sessionStorage.removeItem(key);
       localStorage.removeItem(key);
     });

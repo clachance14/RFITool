@@ -51,3 +51,19 @@ yarn-error.log*
 /playwright-report/
 /blob-report/
 /playwright/.cache/
+
+# TypeScript build info
+tsconfig.tsbuildinfo
+
+# Debug screenshots and artifacts
+*.png
+debug-*.png
+production-*.png
+
+# Temporary files
+*.tmp
+*.temp
+
+# OS generated files
+Thumbs.db
+ehthumbs.db

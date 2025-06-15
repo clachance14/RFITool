@@ -38,10 +38,7 @@ export function useUserRole(): UserRoleData {
       }
 
       try {
-        // Check for role preview mode (App Owner only)
-        const previewRole = typeof window !== 'undefined' ? localStorage.getItem('role_preview_mode') : null;
-        
-        // Get user's actual role from company_users table
+        // Get user's role from company_users table
         const { data: companyUser, error } = await supabase
           .from('company_users')
           .select('role_id')
@@ -50,16 +47,25 @@ export function useUserRole(): UserRoleData {
 
         if (error) {
           console.error('Error fetching user role:', error);
+          console.error('User ID:', session.user.id);
+          console.error('User email:', session.user.email);
           setRole(null);
         } else if (companyUser) {
           const actualRole = ROLE_MAPPING[companyUser.role_id as keyof typeof ROLE_MAPPING];
+          console.log('User role loaded:', {
+            userId: session.user.id,
+            userEmail: session.user.email,
+            roleId: companyUser.role_id,
+            roleName: actualRole
+          });
           
-          // If in preview mode and user is App Owner, use preview role
-          if (previewRole && actualRole === 'app_owner') {
-            setRole(previewRole as UserRole);
-          } else {
-            setRole(actualRole || null);
-          }
+          setRole(actualRole || null);
+        } else {
+          console.error('No company user record found for:', {
+            userId: session.user.id,
+            userEmail: session.user.email
+          });
+          setRole(null);
         }
       } catch (error) {
         console.error('Error in fetchUserRole:', error);
@@ -110,15 +116,15 @@ export function useUserRole(): UserRoleData {
       case 'delete_rfi':
         return ['app_owner', 'super_admin', 'admin'].includes(role);
       case 'export_data':
-        return ['app_owner', 'super_admin', 'admin'].includes(role);
+        return ['app_owner', 'super_admin', 'admin', 'client_collaborator'].includes(role);
       
       // User Management permissions - Updated for safety
       case 'create_user':
-        return ['app_owner', 'super_admin'].includes(role); // Super admin can add users
+        return ['app_owner', 'super_admin', 'admin'].includes(role); // Super admin and admin can add users
       case 'invite_user':
-        return ['app_owner', 'super_admin'].includes(role); // Super admin can invite users
+        return ['app_owner', 'super_admin', 'admin'].includes(role); // Super admin and admin can invite users
       case 'view_users':
-        return ['app_owner', 'super_admin'].includes(role); // Super admin can view users
+        return ['app_owner', 'super_admin', 'admin'].includes(role); // Super admin and admin can view users
       case 'edit_user_roles':
         return ['app_owner'].includes(role); // Only app owner can edit roles
       case 'delete_user':

@@ -87,7 +87,7 @@ node test-rls-security.js
 | `respond_to_rfi` | ✅ | ✅ | ✅ | ❌ | ✅ |
 | `close_rfi` | ✅ | ✅ | ✅ | ❌ | ❌ |
 | `delete_rfi` | ✅ | ✅ | ❌ | ❌ | ❌ |
-| `export_data` | ✅ | ✅ | ❌ | ❌ | ❌ |
+| `export_data` | ✅ | ✅ | ❌ | ❌ | ✅ |
 | **`create_user`** | **✅** | **❌** | **❌** | **❌** | **❌** |
 | **`edit_user_roles`** | **✅** | **❌** | **❌** | **❌** | **❌** |
 | **`delete_user`** | **✅** | **❌** | **❌** | **❌** | **❌** |

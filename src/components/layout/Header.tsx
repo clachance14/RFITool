@@ -1,27 +1,27 @@
 "use client";
 
-import { Bell, AlertTriangle } from 'lucide-react';
+import { Bell, User } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+
+// Role display mapping with colors
+const ROLE_STYLES = {
+  'App Owner': 'bg-red-100 text-red-800 border-red-200',
+  'Super Admin': 'bg-purple-100 text-purple-800 border-purple-200',
+  'Admin': 'bg-blue-100 text-blue-800 border-blue-200',
+  'RFI User': 'bg-yellow-100 text-yellow-800 border-yellow-200',
+  'View Only': 'bg-gray-100 text-gray-800 border-gray-200',
+  'Client Collaborator': 'bg-orange-100 text-orange-800 border-orange-200',
+  'Unknown': 'bg-gray-100 text-gray-800 border-gray-200'
+} as const;
 
 export default function Header() {
   const { user, session } = useAuth();
   const [userProfile, setUserProfile] = useState<any>(null);
   const [company, setCompany] = useState<any>(null);
   const [userRole, setUserRole] = useState<string>('');
-  const [previewMode, setPreviewMode] = useState<string | null>(null);
-  
   useEffect(() => {
-    // Check for preview mode
-    const checkPreviewMode = () => {
-      if (typeof window !== 'undefined') {
-        const preview = localStorage.getItem('role_preview_mode');
-        setPreviewMode(preview);
-      }
-    };
-    
-    checkPreviewMode();
     
     if (session?.user?.id) {
       // Fetch user profile and company data
@@ -80,35 +80,36 @@ export default function Header() {
   const displayEmail = userProfile?.email || user?.email || 'No email';
   const displayCompany = company?.name || 'No Company';
 
+  // Get role style based on current role
+  const currentRole = userRole;
+  const roleStyle = ROLE_STYLES[currentRole as keyof typeof ROLE_STYLES] || ROLE_STYLES['Unknown'];
+
   return (
     <header className="flex items-center justify-between px-6 py-4 bg-white border-b border-gray-200">
       <div className="flex items-center space-x-4">
         <span className="text-2xl font-bold tracking-wide text-gray-800">RFITrak</span>
-        {previewMode && (
-          <div className="flex items-center space-x-2 bg-yellow-100 text-yellow-800 px-3 py-1 rounded-lg border border-yellow-200">
-            <AlertTriangle className="w-4 h-4" />
-            <span className="text-sm font-medium">
-              Preview Mode: {previewMode.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
-            </span>
-          </div>
-        )}
       </div>
       <div className="flex items-center space-x-6">
         <button className="relative p-2 rounded-full hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
           <Bell className="h-6 w-6 text-gray-500" />
           <span className="sr-only">View notifications</span>
         </button>
-        <div className="flex flex-col items-end">
-          <span className="font-semibold text-gray-800 text-lg">{displayName}</span>
-          <span className="text-gray-500 text-sm">{displayEmail}</span>
-          <div className="flex items-center space-x-2">
-            <span className="text-blue-600 text-xs font-medium">{displayCompany}</span>
-            {userRole && (
-              <>
-                <span className="text-gray-400 text-xs">•</span>
-                <span className="text-purple-600 text-xs font-medium">{userRole}</span>
-              </>
-            )}
+        <div className="flex items-center space-x-4">
+          {/* Role Badge - Prominent Display */}
+          {currentRole && (
+            <div className={`flex items-center space-x-2 px-3 py-2 rounded-lg border text-sm font-medium ${roleStyle}`}>
+              <User className="w-4 h-4" />
+              <span>{currentRole}</span>
+            </div>
+          )}
+          
+          {/* User Info */}
+          <div className="flex flex-col items-end">
+            <span className="font-semibold text-gray-800 text-lg">{displayName}</span>
+            <span className="text-gray-500 text-sm">{displayEmail}</span>
+            <div className="flex items-center space-x-2">
+              <span className="text-blue-600 text-xs font-medium">{displayCompany}</span>
+            </div>
           </div>
         </div>
       </div>
