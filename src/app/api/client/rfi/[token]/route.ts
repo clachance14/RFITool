@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
+import { NotificationService } from '@/services/notificationService';
 
 // Use service role client to bypass RLS
 const supabaseAdmin = createClient(
@@ -19,7 +20,8 @@ const clientResponseSchema = z.object({
   client_response_submitted_by: z.string().min(1, 'Submitter name is required'),
   response_status: z.enum(['approved', 'rejected', 'needs_clarification']),
   additional_comments: z.string().optional(),
-  client_cm_approval: z.string().optional()
+  client_cm_approval: z.string().optional(),
+  field_work_approved: z.boolean().optional()
 });
 
 // Validate a secure link token
@@ -107,11 +109,25 @@ export async function GET(
       .select('*')
       .eq('rfi_id', validation.rfi.id);
 
+    // Generate public URLs for attachments if not already present
+    const attachmentsWithUrls = attachments?.map(attachment => {
+      if (!attachment.public_url && attachment.file_path) {
+        const { data } = supabaseAdmin.storage
+          .from('rfi-attachments')
+          .getPublicUrl(attachment.file_path);
+        return {
+          ...attachment,
+          public_url: data.publicUrl
+        };
+      }
+      return attachment;
+    }) || [];
+
     return NextResponse.json({
       success: true,
       data: {
         ...validation.rfi,
-        attachments: attachments || []
+        attachments: attachmentsWithUrls
       }
     });
   } catch (error) {
@@ -171,7 +187,9 @@ export async function POST(
         response_status: validatedResponse.data.response_status,
         additional_comments: validatedResponse.data.additional_comments,
         client_cm_approval: validatedResponse.data.client_cm_approval,
-        status: 'responded',
+        field_work_approved: validatedResponse.data.field_work_approved,
+        status: 'active',
+        stage: 'response_received',
         date_responded: new Date().toISOString(),
         updated_at: new Date().toISOString()
       })
@@ -185,6 +203,21 @@ export async function POST(
         { success: false, error: `Failed to submit response: ${error.message}` },
         { status: 500 }
       );
+    }
+
+    // Send notification about the client response
+    try {
+      const clientName = validation.rfi.projects?.client_company_name || 'Client';
+      await NotificationService.notifyClientResponse(
+        updatedRFI.id,
+        validatedResponse.data.response_status,
+        clientName,
+        // You can add project team emails here if available
+        []
+      );
+    } catch (notificationError) {
+      // Log but don't fail the response submission
+      console.error('Failed to send notification:', notificationError);
     }
 
     return NextResponse.json({

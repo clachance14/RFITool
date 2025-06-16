@@ -8,6 +8,7 @@ import type { RFI, RFIAttachment } from '@/lib/types';
 import { RFIWorkflowControls } from '@/components/rfi/RFIWorkflowControls';
 import { RFIStatusDisplay, RFIProgress } from '@/components/rfi/RFIStatusBadge';
 import { PermissionButton } from '@/components/PermissionButton';
+import { TimesheetTracker } from '@/components/rfi/TimesheetTracker';
 
 interface RFIWorkflowViewProps {
   rfi: RFI;
@@ -177,9 +178,6 @@ export function RFIWorkflowView({ rfi: initialRfi }: RFIWorkflowViewProps) {
                 <p className="text-gray-600 mt-1">{project?.project_name || 'Unknown Project'}</p>
               </div>
               <div className="flex items-center space-x-4">
-                <div className="text-right">
-                  <RFIStatusDisplay status={rfi.status} stage={rfi.stage} layout="vertical" showDescription />
-                </div>
                 <div className="flex space-x-2">
                   <PermissionButton
                     permission="edit_rfi"
@@ -233,24 +231,82 @@ export function RFIWorkflowView({ rfi: initialRfi }: RFIWorkflowViewProps) {
             <div className="lg:col-span-2 space-y-6">
               
               {/* Basic Information */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Basic Information</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">RFI Number</label>
-                    <p className="text-gray-900 font-mono">{rfi.rfi_number}</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Date Created</label>
-                    <p className="text-gray-900">{format(new Date(rfi.created_at), 'PPP')}</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
-                    <p className="text-gray-900 capitalize">{rfi.priority}</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Assigned To</label>
-                    <p className="text-gray-900">{rfi.assigned_to || 'Unassigned'}</p>
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div className="px-6 py-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-gray-200">
+                  <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                    <svg className="w-5 h-5 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Basic Information
+                  </h3>
+                </div>
+                <div className="p-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="flex items-center space-x-3">
+                      <div className="flex-shrink-0">
+                        <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                          <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
+                          </svg>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-500">RFI Number</label>
+                        <p className="text-lg font-semibold text-gray-900 font-mono">{rfi.rfi_number}</p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center space-x-3">
+                      <div className="flex-shrink-0">
+                        <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                          <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3a4 4 0 118 0v4m-4 8a2 2 0 100-4 2 2 0 000 4zm6 0a2 2 0 100-4 2 2 0 000 4zm-6 4a2 2 0 100-4 2 2 0 000 4zm6 0a2 2 0 100-4 2 2 0 000 4z" />
+                          </svg>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-500">Date Created</label>
+                        <p className="text-lg font-semibold text-gray-900">{format(new Date(rfi.created_at), 'MMM d, yyyy')}</p>
+                      </div>
+                    </div>
+                    
+                    {(rfi as any).urgency === 'urgent' && (
+                      <div className="flex items-center space-x-3">
+                        <div className="flex-shrink-0">
+                          <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+                            <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                            </svg>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-500">Urgency</label>
+                          <div className="flex items-center space-x-2">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                              URGENT
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    <div className="flex items-center space-x-3">
+                      <div className="flex-shrink-0">
+                        <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                          <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                          </svg>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-500">Assigned To</label>
+                        <p className="text-lg font-semibold text-gray-900">
+                          {rfi.assigned_to || (
+                            <span className="text-gray-400 italic">Unassigned</span>
+                          )}
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -262,44 +318,82 @@ export function RFIWorkflowView({ rfi: initialRfi }: RFIWorkflowViewProps) {
               </div>
 
               {/* RFI Content */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">RFI Content</h3>
-                
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Subject</label>
-                    <p className="text-gray-900 p-3 bg-gray-50 rounded border">{rfi.subject}</p>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-                    <div className="text-gray-900 p-3 bg-gray-50 rounded border whitespace-pre-wrap">
-                      {rfi.description || 'No description provided.'}
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Proposed Solution</label>
-                    <div className="text-gray-900 p-3 bg-gray-50 rounded border whitespace-pre-wrap">
-                      {rfi.proposed_solution || 'No proposed solution provided.'}
-                    </div>
-                  </div>
-
-                  {rfi.response && (
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div className="px-6 py-4 bg-gradient-to-r from-green-50 to-emerald-50 border-b border-gray-200">
+                  <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                    <svg className="w-5 h-5 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    RFI Content
+                  </h3>
+                </div>
+                <div className="p-6">
+                  <div className="space-y-6">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Client Response
-                        {rfi.response_date && (
-                          <span className="text-xs text-gray-500 ml-2">
-                            ({format(new Date(rfi.response_date), 'PPP')})
-                          </span>
-                        )}
+                      <label className="block text-sm font-medium text-gray-500 mb-2 flex items-center">
+                        <svg className="w-4 h-4 text-blue-500 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a.997.997 0 01-1.414 0l-7-7A1.997 1.997 0 013 12V7a4 4 0 014-4z" />
+                        </svg>
+                        Subject
                       </label>
-                      <div className="text-gray-900 p-3 bg-green-50 border border-green-200 rounded whitespace-pre-wrap">
-                        {rfi.response}
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                        <p className="text-gray-900 font-medium">{rfi.subject}</p>
                       </div>
                     </div>
-                  )}
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-500 mb-2 flex items-center">
+                        <svg className="w-4 h-4 text-purple-500 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" />
+                        </svg>
+                        Description
+                      </label>
+                      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                        <div className="text-gray-900 whitespace-pre-wrap">
+                          {rfi.description || (
+                            <span className="text-gray-400 italic">No description provided.</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-500 mb-2 flex items-center">
+                        <svg className="w-4 h-4 text-orange-500 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                        </svg>
+                        Proposed Solution
+                      </label>
+                      <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                        <div className="text-gray-900 whitespace-pre-wrap">
+                          {rfi.proposed_solution || (
+                            <span className="text-gray-400 italic">No proposed solution provided.</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {rfi.response && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-500 mb-2 flex items-center">
+                          <svg className="w-4 h-4 text-green-500 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                          </svg>
+                          Client Response
+                          {rfi.response_date && (
+                            <span className="text-xs text-gray-400 ml-2 font-normal">
+                              • {format(new Date(rfi.response_date), 'MMM d, yyyy')}
+                            </span>
+                          )}
+                        </label>
+                        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                          <div className="text-gray-900 whitespace-pre-wrap">
+                            {rfi.response}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -462,6 +556,11 @@ export function RFIWorkflowView({ rfi: initialRfi }: RFIWorkflowViewProps) {
                     </div>
                   </div>
                 )}
+              </div>
+
+              {/* Actual Cost Tracking */}
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <TimesheetTracker rfiId={rfi.id} isReadOnly={rfi.status === 'closed'} />
               </div>
 
               {/* Field Work Tracking */}

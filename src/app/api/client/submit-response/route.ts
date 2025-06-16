@@ -1,5 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@supabase/supabase-js';
+
+// Use service role client to bypass RLS
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  }
+);
 
 interface ClientResponseRequest {
   rfi_id: string;
@@ -7,6 +19,62 @@ interface ClientResponseRequest {
   client_name: string;
   client_email: string;
   attachment_count: number;
+}
+
+// Validate a secure link token (matching the main RFI endpoint)
+async function validateToken(token: string): Promise<{
+  valid: boolean;
+  rfi?: any;
+  reason?: string;
+}> {
+  try {
+    const { data: rfi, error } = await supabaseAdmin
+      .from('rfis')
+      .select(`
+        *,
+        projects!inner(
+          id,
+          project_name,
+          client_company_name,
+          contractor_job_number
+        )
+      `)
+      .eq('secure_link_token', token)
+      .single();
+
+    if (error || !rfi) {
+      return {
+        valid: false,
+        reason: 'Invalid or expired link'
+      };
+    }
+
+    // Check if link has expired
+    if (rfi.link_expires_at && new Date(rfi.link_expires_at) < new Date()) {
+      return {
+        valid: false,
+        reason: 'Link has expired'
+      };
+    }
+
+    // Check if RFI has already been responded to
+    if (rfi.status === 'responded' && !rfi.allow_multiple_responses) {
+      return {
+        valid: false,
+        reason: 'This RFI has already been responded to'
+      };
+    }
+
+    return {
+      valid: true,
+      rfi
+    };
+  } catch (error) {
+    return {
+      valid: false,
+      reason: 'Failed to validate link'
+    };
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -22,18 +90,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate client session
-    const { data: sessionData, error: sessionError } = await supabase
-      .rpc('validate_client_session', { p_token: clientToken });
-
-    if (sessionError || !sessionData || sessionData.length === 0 || !sessionData[0].is_valid) {
+    // Validate client token using the same method as the main RFI endpoint
+    const validation = await validateToken(clientToken);
+    if (!validation.valid) {
       return NextResponse.json(
-        { error: 'Invalid or expired client session' },
+        { error: validation.reason || 'Invalid token' },
         { status: 401 }
       );
     }
 
-    const session = sessionData[0];
+    const rfi = validation.rfi;
 
     // Parse request body
     const body: ClientResponseRequest = await request.json();
@@ -46,29 +112,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate RFI ID matches session
-    if (rfi_id !== session.rfi_id) {
+    // Validate RFI ID matches token
+    if (rfi_id !== rfi.id) {
       return NextResponse.json(
-        { error: 'RFI ID does not match client session' },
+        { error: 'RFI ID does not match client token' },
         { status: 403 }
       );
     }
 
     // Check if response already exists
-    const { data: existingRfi, error: rfiError } = await supabase
-      .from('rfis')
-      .select('client_response, stage')
-      .eq('id', rfi_id)
-      .single();
-
-    if (rfiError) {
-      return NextResponse.json(
-        { error: 'RFI not found' },
-        { status: 404 }
-      );
-    }
-
-    if (existingRfi.client_response && existingRfi.stage === 'response_received') {
+    if (rfi.client_response && rfi.stage === 'response_received') {
       return NextResponse.json(
         { error: 'Response has already been submitted for this RFI' },
         { status: 409 }
@@ -76,15 +129,14 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-      // Update RFI with client response
-      const { data: updatedRfi, error: updateError } = await supabase
+      // Update RFI with client response and advance workflow stage
+      const { data: updatedRfi, error: updateError } = await supabaseAdmin
         .from('rfis')
         .update({
           client_response: response,
           date_responded: new Date().toISOString(),
           stage: 'response_received',
-          client_response_by: client_name || client_email || 'Client User',
-          client_response_date: new Date().toISOString()
+          updated_at: new Date().toISOString()
         })
         .eq('id', rfi_id)
         .select()
@@ -98,69 +150,79 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Log the response submission in audit trail
-      await supabase
-        .from('rfi_audit_log')
-        .insert({
-          rfi_id: rfi_id,
-          action: 'client_response_submitted',
-          performed_by: client_name || client_email || 'Client User',
-          performed_by_type: 'client',
-          client_session_token: clientToken,
-          old_values: {
-            stage: existingRfi.stage,
-            client_response: existingRfi.client_response
-          },
-          new_values: {
-            stage: 'response_received',
-            client_response: response
-          },
-          ip_address: request.ip || null,
-          user_agent: request.headers.get('user-agent') || null,
-          details: {
-            response_length: response.length,
-            attachment_count: attachment_count || 0,
-            client_name: client_name,
-            client_email: client_email
-          }
-        });
+      // Log the response submission in audit trail (optional - may not exist yet)
+      try {
+        await supabaseAdmin
+          .from('rfi_audit_log')
+          .insert({
+            rfi_id: rfi_id,
+            action: 'client_response_submitted',
+            performed_by: client_name || client_email || 'Client User',
+            performed_by_type: 'client',
+            client_session_token: clientToken,
+            old_values: {
+              stage: rfi.stage,
+              client_response: rfi.client_response
+            },
+            new_values: {
+              stage: 'response_received',
+              client_response: response
+            },
+            ip_address: request.ip || null,
+            user_agent: request.headers.get('user-agent') || null,
+            details: {
+              response_length: response.length,
+              attachment_count: attachment_count || 0,
+              client_name: client_name,
+              client_email: client_email
+            }
+          });
+      } catch (auditError) {
+        // Audit logging is optional - don't fail the response if it doesn't work
+        console.warn('Audit logging failed:', auditError);
+      }
 
-      // Update client session with response submission
-      await supabase
-        .from('client_sessions')
-        .update({ 
-          last_accessed: new Date().toISOString(),
-          response_submitted: true,
-          response_submitted_at: new Date().toISOString()
-        })
-        .eq('token', clientToken);
-
-      // Send notification to internal team (optional - could be implemented later)
-      // await sendInternalNotification({
-      //   type: 'client_response_received',
-      //   rfi_id: rfi_id,
-      //   client_name: client_name,
-      //   response: response
-      // });
+      // Send notification about the client response
+      try {
+        await supabaseAdmin
+          .from('notifications')
+          .insert({
+            rfi_id: updatedRfi.id,
+            type: 'response_received',
+            message: `Client response received from ${client_name || client_email || 'Client User'}`,
+            metadata: {
+              client_name: client_name,
+              client_email: client_email,
+              response_length: response.length,
+              attachment_count: attachment_count || 0
+            },
+            is_read: false
+          });
+      } catch (notificationError) {
+        // Log but don't fail the response submission
+        console.error('Failed to create notification:', notificationError);
+      }
 
       return NextResponse.json({
         success: true,
         message: 'Response submitted successfully',
-        rfi_id: rfi_id,
-        response_date: updatedRfi.date_responded,
-        stage: updatedRfi.stage
+        data: {
+          rfi_id: updatedRfi.id,
+          response_submitted_at: updatedRfi.date_responded,
+          stage: updatedRfi.stage
+        }
       });
 
-    } catch (dbError) {
-      console.error('Database error during response submission:', dbError);
+    } catch (error) {
+      console.error('Response submission error:', error);
       return NextResponse.json(
-        { error: 'Database error occurred while saving response' },
+        { error: 'Failed to submit response' },
         { status: 500 }
       );
     }
 
   } catch (error) {
-    console.error('Client response submission error:', error);
+    console.error('Submit response endpoint error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

@@ -73,6 +73,37 @@ export interface RFICostItem {
   created_at: string;
 }
 
+// RFI Timesheet Entry Interface
+export interface RFITimesheetEntry {
+  id: string;
+  rfi_id: string;
+  timesheet_number: string;
+  labor_hours: number;
+  labor_cost: number;
+  material_cost: number;
+  subcontractor_cost: number;
+  equipment_cost: number;
+  description?: string;
+  entry_date: string;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// RFI Timesheet Summary Interface
+export interface RFITimesheetSummary {
+  rfi_id: string;
+  total_entries: number;
+  total_labor_hours: number;
+  total_labor_cost: number;
+  total_material_cost: number;
+  total_subcontractor_cost: number;
+  total_equipment_cost: number;
+  total_cost: number;
+  first_entry_date: string;
+  last_entry_date: string;
+}
+
 // RFI Attachment Interface
 export interface RFIAttachment {
   id: string;
@@ -193,6 +224,10 @@ export interface RFI {
   subcontractor_costs?: number;
   // Cost Items (new normalized structure)
   cost_items?: RFICostItem[];
+  
+  // Timesheet entries for detailed cost tracking
+  timesheet_entries?: RFITimesheetEntry[];
+  timesheet_summary?: RFITimesheetSummary;
   
   // Cost Tracking Flags
   exclude_from_cost_tracking?: boolean; // For VOIDED/SUPERSEDED RFIs

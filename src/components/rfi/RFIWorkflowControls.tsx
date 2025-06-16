@@ -39,7 +39,23 @@ export function RFIWorkflowControls({ rfi, onStatusChange }: RFIWorkflowControls
         updateData.work_started_date = now;
       } else if (newStage === 'work_completed') {
         updateData.work_completed_date = now;
+        // Always include work_started_date for validation
+        if (rfi.work_started_date) {
+          // Normalize the datetime format to ISO string
+          updateData.work_started_date = new Date(rfi.work_started_date).toISOString();
+        } else {
+          updateData.work_started_date = now;
+        }
       }
+
+      // Debug logging
+      console.log('Current RFI state:', {
+        status: rfi.status,
+        stage: rfi.stage,
+        work_started_date: rfi.work_started_date,
+        work_completed_date: rfi.work_completed_date
+      });
+      console.log('Update data being sent:', updateData);
 
       const updatedRFI = await updateRFI(rfi.id, updateData);
       onStatusChange?.(newStatus, updatedRFI);

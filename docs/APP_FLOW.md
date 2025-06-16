@@ -16,7 +16,9 @@ This document serves as a comprehensive technical reference for understanding th
 10. [Database Design](#database-design)
 11. [Security Implementation](#security-implementation)
 12. [Client Workflow System](#client-workflow-system)
-13. [File Structure Reference](#file-structure-reference)
+13. [Notification System](#notification-system)
+14. [Cost Tracking System](#cost-tracking-system)
+15. [File Structure Reference](#file-structure-reference)
 
 ---
 
@@ -31,6 +33,8 @@ This document serves as a comprehensive technical reference for understanding th
 - **Client Collaboration**: Secure external client access
 - **Project Management**: Project-centric organization
 - **Document Management**: File attachments and templates
+- **Real-time Notifications**: Comprehensive notification system with email integration
+- **Cost Tracking**: Timesheet-based cost tracking with automatic calculations
 - **Reporting & Analytics**: Data export and reporting
 
 ### Target Users
@@ -47,275 +51,23 @@ Frontend: Next.js 14 (App Router)
 ├── TypeScript
 ├── Tailwind CSS
 ├── Lucide Icons
-└── React Hot Toast
+├── React Hot Toast
+└── Real-time Notification System
 
 Backend: Supabase
 ├── PostgreSQL Database
 ├── Authentication (Supabase Auth)
 ├── Row Level Security (RLS)
 ├── Real-time subscriptions
-└── Storage (file uploads)
+├── Storage (file uploads)
+├── Notification System (notifications table)
+└── Cost Tracking System (timesheet tables)
 
-Deployment: [Not specified in codebase]
-```
-
----
-
-## User Role System
-
-### Role Hierarchy (6-Tier System)
-
-```
-Role ID | Role Name           | Access Level        | Primary Use Case
---------|--------------------|--------------------|------------------
-   0    | app_owner          | System-wide        | Platform admin
-   1    | super_admin        | Company-wide       | Company owner
-   2    | admin              | Project-scoped     | Project manager
-   3    | rfi_user           | Standard user      | RFI creator/editor
-   4    | view_only          | Read-only          | Stakeholder viewer
-   5    | client_collaborator| External client    | Client responses
-```
-
-### Permission Matrix
-
-```
-Permission               | App Owner | Super Admin | Admin | RFI User | View Only | Client
-------------------------|-----------|-------------|-------|----------|-----------|--------
-create_rfi              |    ✅     |     ✅      |   ✅   |    ✅    |    ❌     |   ❌
-edit_rfi                |    ✅     |     ✅      |   ✅   |    ✅    |    ❌     |   ❌
-create_project          |    ✅     |     ✅      |   ✅   |    ❌    |    ❌     |   ❌
-edit_project            |    ✅     |     ✅      |   ✅   |    ❌    |    ❌     |   ❌
-access_admin            |    ✅     |     ✅      |   ✅   |    ❌    |    ❌     |   ❌
-view_rfis               |    ✅     |     ✅      |   ✅   |    ✅    |    ✅     |   ✅
-view_projects           |    ✅     |     ✅      |   ✅   |    ✅    |    ✅     |   ✅
-view_reports            |    ✅     |     ✅      |   ✅   |    ✅    |    ✅     |   ✅
-generate_client_link    |    ✅     |     ✅      |   ✅   |    ✅    |    ❌     |   ❌
-print_rfi               |    ✅     |     ✅      |   ✅   |    ✅    |    ❌     |   ❌
-submit_rfi              |    ✅     |     ✅      |   ✅   |    ✅    |    ❌     |   ❌
-respond_to_rfi          |    ✅     |     ✅      |   ✅   |    ✅    |    ❌     |   ✅
-close_rfi               |    ✅     |     ✅      |   ✅   |    ✅    |    ❌     |   ❌
-delete_rfi              |    ✅     |     ✅      |   ✅   |    ❌    |    ❌     |   ❌
-export_data             |    ✅     |     ✅      |   ✅   |    ❌    |    ❌     |   ✅
-create_user             |    ✅     |     ✅      |   ✅   |    ❌    |    ❌     |   ❌
-edit_user_roles         |    ✅     |     ❌      |   ❌   |    ❌    |    ❌     |   ❌
-delete_user             |    ✅     |     ❌      |   ❌   |    ❌    |    ❌     |   ❌
-```
-
-**Implementation Location**: `src/hooks/useUserRole.ts` - `hasPermission()` function
-
----
-
-## Authentication & Authorization Flow
-
-### Authentication Process
-
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   User Access   │ -> │  AuthGuard      │ -> │ LayoutWrapper   │
-│   Application   │    │  Component      │    │ Component       │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                       │                       │
-         v                       v                       v
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│ Check Auth      │    │ Route           │    │ Role-based      │
-│ Status          │    │ Protection      │    │ Layout          │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-```
-
-### Route Protection Logic
-
-**File**: `src/components/AuthGuard.tsx`
-
-```typescript
-// Public Routes (no auth required)
-const publicRoutes = ['/login', '/auth/callback', '/client/logged-out']
-
-// Client Routes (separate auth logic)
-const clientRoutes = ['/client/', '/rfi/']
-
-// Protected Routes (require authentication)
-// All other routes require authentication
-```
-
-### User Session Management
-
-```
-1. User visits application
-   ↓
-2. AuthGuard checks authentication status
-   ↓
-3. If not authenticated → Redirect to /login
-   ↓
-4. If authenticated → Check user role
-   ↓
-5. Apply role-based routing and UI rendering
-```
-
-**Implementation Files**:
-- `src/contexts/AuthContext.tsx` - Authentication state management
-- `src/components/AuthGuard.tsx` - Route protection
-- `src/hooks/useUserRole.ts` - Role management and permissions
-
----
-
-## Application Entry Points
-
-### Root Layout Structure
-
-**File**: `src/app/layout.tsx`
-
-```
-RootLayout
-├── AuthProvider (Authentication Context)
-│   └── AuthGuard (Route Protection)
-│       └── RFIProvider (RFI Data Context)
-│           └── LayoutWrapper (Role-based Layout)
-│               └── [Page Content]
-│               └── Toaster (Notifications)
-```
-
-### Layout Wrapper Logic
-
-**File**: `src/components/LayoutWrapper.tsx`
-
-```typescript
-// Layout decision tree:
-if (!user || loading) return children; // No layout for unauthenticated
-
-if (role === 'client_collaborator') {
-  // Client Layout: Simplified navigation
-  return <ClientLayout />;
-}
-
-// Standard Layout: Full navigation
-return <StandardLayout />;
-```
-
----
-
-## Core User Journeys
-
-### 1. Internal User Journey (Admin/RFI User)
-
-```
-Login (/login)
-    ↓
-Dashboard (/)
-    ↓
-┌─────────────────┬─────────────────┬─────────────────┐
-│   Projects      │    RFI Log      │     Admin       │
-│   (/projects)   │  (/rfi-log)     │   (/admin)      │
-└─────────────────┴─────────────────┴─────────────────┘
-    ↓                    ↓                    ↓
-Create/Edit         Create/Edit RFI      User Management
-Project             (/rfis/create)       Role Management
-    ↓                    ↓                    ↓
-RFI Management      RFI Detail           System Settings
-                    (/rfis/[id])
-    ↓                    ↓
-Generate Client     Workflow Actions:
-Link                - Submit RFI
-                    - Generate Link
-                    - Print RFI
-                    - Close RFI
-```
-
-### 2. Client User Journey (External)
-
-```
-Secure Link Access (/client/[token])
-    ↓
-Client Authentication
-    ↓
-RFI Log (client view) (/rfi-log)
-    ↓
-RFI Detail (client view) (/rfis/[id])
-    ↓
-┌─────────────────┬─────────────────┐
-│   View RFI      │   Respond to    │
-│   Details       │   RFI           │
-└─────────────────┴─────────────────┘
-    ↓                    ↓
-Export Reports      Submit Response
-(/reports)              ↓
-    ↓              Response Recorded
-Logout                  ↓
-(/client/logged-out)   Email Notification
-```
-
-### 3. Admin Management Journey
-
-```
-Admin Panel (/admin)
-    ↓
-┌─────────────────┬─────────────────┬─────────────────┐
-│ User Management │ Role Preview    │ System Settings │
-└─────────────────┴─────────────────┴─────────────────┘
-    ↓                    ↓                    ↓
-Create/Edit Users   Preview Role        Configure System
-Assign Roles        Permissions         Export Data
-Invite Users        Test Access         Manage Templates
-Delete Users        levels
-```
-
-**Key Navigation Files**:
-- `src/components/layout/Navigation.tsx` - Main navigation logic
-- `src/components/layout/Header.tsx` - Header with user info
-- `src/components/layout/ClientLayout.tsx` - Client-specific layout
-This document serves as a comprehensive technical reference for understanding the complete RFITrak application architecture, user flows, and implementation details. It is designed specifically for AI coding assistance to make informed development decisions.
-
-## Table of Contents
-1. [Application Overview](#application-overview)
-2. [Architecture Stack](#architecture-stack)
-3. [User Role System](#user-role-system)
-4. [Authentication & Authorization Flow](#authentication--authorization-flow)
-5. [Application Entry Points](#application-entry-points)
-6. [Core User Journeys](#core-user-journeys)
-7. [Component Architecture](#component-architecture)
-8. [Data Flow Architecture](#data-flow-architecture)
-9. [API Architecture](#api-architecture)
-10. [Database Design](#database-design)
-11. [Security Implementation](#security-implementation)
-12. [Client Workflow System](#client-workflow-system)
-13. [File Structure Reference](#file-structure-reference)
-
----
-
-## Application Overview
-
-**RFITrak** is a multi-tenant SaaS application for managing RFIs (Requests for Information) in the construction industry. It enables general contractors to create, manage, and collaborate on RFIs with clients through secure workflows.
-
-### Core Features
-- **Multi-tenant Architecture**: Company-based data isolation
-- **Role-based Access Control**: 6-tier permission system
-- **RFI Lifecycle Management**: Draft → Active → Closed workflow
-- **Client Collaboration**: Secure external client access
-- **Project Management**: Project-centric organization
-- **Document Management**: File attachments and templates
-- **Reporting & Analytics**: Data export and reporting
-
-### Target Users
-- **Internal Users**: Contractors, project managers, admins
-- **External Users**: Clients, stakeholders, collaborators
-
----
-
-## Architecture Stack
-
-```
-Frontend: Next.js 14 (App Router)
-├── React 18 (Server Components + Client Components)
-├── TypeScript
-├── Tailwind CSS
-├── Lucide Icons
-└── React Hot Toast
-
-Backend: Supabase
-├── PostgreSQL Database
-├── Authentication (Supabase Auth)
-├── Row Level Security (RLS)
-├── Real-time subscriptions
-└── Storage (file uploads)
+New Systems:
+├── Notification Service (NotificationService)
+├── Timesheet Tracking (RFI Timesheet Entries)
+├── Email Integration (Mock/Real email services)
+└── Cost Calculation Engine
 
 Deployment: [Not specified in codebase]
 ```
@@ -875,6 +627,280 @@ Client Session Expires/Logout
 - `src/components/rfi/RFIWorkflowView.tsx` - Internal view
 - `src/components/rfi/RFIFormalView.tsx` - Client view
 - `src/app/rfis/[id]/page.tsx` - View selection logic
+
+---
+
+## Notification System
+
+### Notification Flow
+
+```
+Internal User (RFI Creator)
+    ↓
+Create Notification (useRFIs.createNotification())
+    ↓
+Notification Sent to All Project Users
+    ↓
+Client Receives Notification
+    ↓
+Notification Read Status
+    ↓
+Notification Archive
+```
+
+### Notification Types
+
+- **RFI Creation**: Notify all project users about a new RFI
+- **RFI Update**: Notify users about changes to an existing RFI
+- **Project Update**: Notify users about changes to a project
+- **Cost Update**: Notify users about changes to project costs
+
+### Notification Implementation
+
+**File**: `src/components/notifications/NotificationService.ts`
+
+```typescript
+// Example notification service implementation
+export async function createNotification(rfi: RFI): Promise<void> {
+  // Implementation logic to create a notification
+}
+
+export async function sendNotification(notification: Notification): Promise<void> {
+  // Implementation logic to send a notification
+}
+
+export async function markNotificationRead(notification: Notification): Promise<void> {
+  // Implementation logic to mark a notification as read
+}
+
+export async function archiveNotification(notification: Notification): Promise<void> {
+  // Implementation logic to archive a notification
+}
+```
+
+---
+
+## Cost Tracking System
+
+### Cost Tracking Flow
+
+```
+Internal User (RFI Creator)
+    ↓
+Create Cost Entry (useRFIs.createCostEntry())
+    ↓
+Cost Calculation (useRFIs.calculateCost())
+    ↓
+Cost Updated Notification
+    ↓
+Client Receives Cost Update
+    ↓
+Cost Archive
+```
+
+### Cost Types
+
+- **RFI Cost**: Cost associated with an RFI
+- **Project Cost**: Cost associated with a project
+
+### Cost Tracking Implementation
+
+**File**: `src/components/costs/CostTrackingService.ts`
+
+```typescript
+// Example cost tracking service implementation
+export async function createCostEntry(rfi: RFI): Promise<void> {
+  // Implementation logic to create a cost entry
+}
+
+export async function calculateCost(rfi: RFI): Promise<void> {
+  // Implementation logic to calculate cost
+}
+
+export async function updateCost(rfi: RFI): Promise<void> {
+  // Implementation logic to update cost
+}
+
+export async function archiveCost(rfi: RFI): Promise<void> {
+  // Implementation logic to archive cost
+}
+```
+
+---
+
+## Notification System
+
+### Architecture Overview
+
+The notification system provides real-time updates for RFI activities through a comprehensive notification framework:
+
+```
+Client Response → API Route → NotificationService → Database → Real-time UI Update
+                                     ↓
+                              Email Service → Team Members
+```
+
+### Key Components
+
+#### NotificationService (`src/services/notificationService.ts`)
+- Core service for all notification operations
+- Handles creation, delivery, and management of notifications
+- Integrates with email services for external notifications
+
+#### NotificationBell Component (`src/components/notifications/NotificationBell.tsx`)
+- Header notification icon with unread count
+- Dropdown preview of recent notifications
+- Real-time polling for new notifications (30-second intervals)
+- Integrated into main layout header
+
+#### Notifications Page (`src/app/notifications/page.tsx`)
+- Full notification management interface
+- Search and filtering capabilities
+- Bulk actions (mark as read, clear notifications)
+- Detailed notification history and statistics
+
+### Notification Types
+
+1. **Response Received** (`response_received`)
+   - Triggered when clients submit RFI responses
+   - Notifies project team members
+   - Includes response status and client information
+
+2. **Status Changed** (`status_changed`)
+   - Triggered when RFI status is updated
+   - Notifies relevant team members based on workflow rules
+
+3. **Overdue Reminder** (`overdue_reminder`)
+   - Automated reminders for overdue RFIs
+   - Escalation notifications to project managers
+
+4. **Link Generated** (`link_generated`)
+   - Notifies when secure client links are created
+   - Sent to client contacts with access instructions
+
+### Database Schema
+
+```sql
+-- Notifications table
+CREATE TABLE notifications (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    rfi_id UUID NOT NULL REFERENCES rfis(id) ON DELETE CASCADE,
+    type VARCHAR(50) NOT NULL,
+    message TEXT NOT NULL,
+    metadata JSONB DEFAULT '{}',
+    is_read BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+```
+
+### Integration Points
+
+- **Client Response Flow**: Triggers notifications when responses are submitted
+- **RFI Workflow**: Integrated into status transitions and workflow actions
+- **Email System**: Sends email notifications to team members
+- **Real-time Updates**: Polls for new notifications every 30 seconds
+
+---
+
+## Cost Tracking System
+
+### Architecture Overview
+
+The timesheet cost tracking system enables detailed cost management for RFIs:
+
+```
+User Input → TimesheetTracker → API Routes → Database → Cost Calculations
+                                    ↓
+                             Summary Views → Reports
+```
+
+### Key Components
+
+#### TimesheetTracker Component (`src/components/rfi/TimesheetTracker.tsx`)
+- User interface for timesheet entry creation and management
+- Form validation and error handling
+- Real-time cost calculations and summaries
+- Integrated into RFI workflow views
+
+#### Timesheet API Routes (`src/app/api/rfis/[id]/timesheet-entries/`)
+- Full CRUD operations for timesheet entries
+- Data validation and business logic
+- Cost calculation and summary generation
+- Error handling and database migration checks
+
+#### useTimesheetEntries Hook (`src/hooks/useTimesheetEntries.ts`)
+- React hook for timesheet data management
+- Loading states and error handling
+- Automatic data refresh after operations
+- Optimistic updates for better UX
+
+### Cost Categories
+
+1. **Labor Costs**
+   - Hours worked and associated hourly rates
+   - Labor cost calculations
+
+2. **Material Costs**
+   - Material expenses per RFI
+   - Material cost tracking
+
+3. **Subcontractor Costs**
+   - External contractor expenses
+   - Subcontractor cost management
+
+4. **Equipment Costs**
+   - Equipment usage and rental costs
+   - Equipment cost tracking
+
+### Database Schema
+
+```sql
+-- Main timesheet entries table
+CREATE TABLE rfi_timesheet_entries (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    rfi_id UUID NOT NULL REFERENCES rfis(id) ON DELETE CASCADE,
+    timesheet_number VARCHAR(100) NOT NULL,
+    labor_hours DECIMAL(10,2) DEFAULT 0,
+    labor_cost DECIMAL(12,2) DEFAULT 0,
+    material_cost DECIMAL(12,2) DEFAULT 0,
+    subcontractor_cost DECIMAL(12,2) DEFAULT 0,
+    equipment_cost DECIMAL(12,2) DEFAULT 0,
+    description TEXT,
+    entry_date DATE NOT NULL,
+    created_by UUID NOT NULL REFERENCES auth.users(id),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Summary view for cost aggregation
+CREATE VIEW rfi_timesheet_summary AS
+SELECT 
+    rfi_id,
+    COUNT(*) as total_entries,
+    SUM(labor_hours) as total_labor_hours,
+    SUM(labor_cost) as total_labor_cost,
+    SUM(material_cost) as total_material_cost,
+    SUM(subcontractor_cost) as total_subcontractor_cost,
+    SUM(equipment_cost) as total_equipment_cost,
+    SUM(labor_cost + material_cost + subcontractor_cost + equipment_cost) as total_cost
+FROM rfi_timesheet_entries
+GROUP BY rfi_id;
+```
+
+### Integration Points
+
+- **RFI Workflow**: Embedded in RFIWorkflowView, RFIFormalView, and RfiDetailView
+- **Project Management**: Links actual costs to RFI and project budgets
+- **Reporting**: Provides cost data for project analytics and reports
+- **Security**: Protected by Row Level Security (RLS) policies
+
+### Features
+
+- **Unique Timesheet Numbers**: Prevents duplicate entries per RFI
+- **Automatic Calculations**: Real-time cost summaries and totals
+- **Audit Trail**: Complete history of cost entries and modifications
+- **Form Validation**: Ensures data integrity and prevents errors
+- **Cost Summaries**: Visual display of total costs and breakdowns
 
 ---
 

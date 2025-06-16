@@ -158,7 +158,8 @@ export class RFISecureLinkService {
           response_status: response.response_status,
           additional_comments: response.additional_comments,
           client_cm_approval: response.client_cm_approval,
-          status: 'responded',
+          status: 'active',
+          stage: 'response_received',
           date_responded: new Date().toISOString(),
           updated_at: new Date().toISOString()
         })

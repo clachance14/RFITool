@@ -263,8 +263,9 @@ export function SimpleRFIFormWorking({ isReadOnly = false }: SimpleRFIFormWorkin
       return;
     }
     setSubmitAction('active');
-    // Update the form's status field directly
+    // Update the form's status field directly and set appropriate stage
     form.setValue('status', 'active');
+    form.setValue('stage', 'sent_to_client'); // Set initial stage for active RFIs
     form.handleSubmit(onSubmit)();
   };
 

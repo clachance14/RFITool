@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { Send, MessageCircle, Paperclip, CheckCircle2, Clock } from 'lucide-react';
 import { ClientFileUpload } from './ClientFileUpload';
+import { useToast } from '@/components/ui/use-toast';
+import { Toast } from '@/components/ui/toast';
 import type { RFI } from '@/lib/types';
 
 interface ClientResponseFormProps {
@@ -25,6 +27,7 @@ export function ClientResponseForm({
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [uploadedAttachments, setUploadedAttachments] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const { toast, toasts, dismiss } = useToast();
 
   // Check if response is already submitted
   useEffect(() => {
@@ -64,12 +67,27 @@ export function ClientResponseForm({
 
       const result = await response.json();
       
+      // Show success toast
+      toast({
+        title: "Response Submitted Successfully!",
+        description: "Your response has been received and is being reviewed by the contractor team.",
+        variant: "default"
+      });
+      
       setIsSubmitted(true);
       onResponseSubmit?.(responseText, uploadedAttachments);
 
     } catch (error) {
       console.error('Response submission error:', error);
-      setError(error instanceof Error ? error.message : 'Failed to submit response');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to submit response';
+      setError(errorMessage);
+      
+      // Show error toast
+      toast({
+        title: "Submission Failed",
+        description: errorMessage,
+        variant: "destructive"
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -125,7 +143,9 @@ export function ClientResponseForm({
   }
 
   return (
-    <div className="space-y-6">
+    <>
+      <Toast toasts={toasts} onDismiss={dismiss} />
+      <div className="space-y-6">
       {/* Response Instructions */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <div className="flex items-start">
@@ -234,5 +254,6 @@ export function ClientResponseForm({
         )}
       </div>
     </div>
+    </>
   );
 } 

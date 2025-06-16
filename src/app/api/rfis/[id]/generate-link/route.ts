@@ -55,13 +55,17 @@ export async function POST(
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + expirationDays);
     
-    // Update RFI with secure link token using admin client
+    // Update RFI with secure link token and set appropriate status/stage
     const { error } = await supabaseAdmin
       .from('rfis')
       .update({
         secure_link_token: token,
         link_expires_at: expiresAt.toISOString(),
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
+        // When generating a client link, the RFI is being sent to the client
+        status: 'active',
+        stage: 'sent_to_client',
+        date_sent: new Date().toISOString()
       })
       .eq('id', rfiId);
 
@@ -71,6 +75,27 @@ export async function POST(
         { success: false, error: `Failed to generate secure link: ${error.message}` },
         { status: 500 }
       );
+    }
+
+    // Create notification for link generation
+    try {
+      await supabaseAdmin
+        .from('notifications')
+        .insert({
+          rfi_id: rfiId,
+          type: 'link_generated',
+          message: 'Secure client link generated and RFI sent to client',
+          metadata: {
+            secure_link_generated: true,
+            expires_at: expiresAt.toISOString(),
+            status_changed_to: 'active',
+            stage_changed_to: 'sent_to_client'
+          },
+          is_read: false
+        });
+    } catch (notificationError) {
+      // Log but don't fail the link generation if notification fails
+      console.warn('Failed to create link generation notification:', notificationError);
     }
 
     // Create secure link URL

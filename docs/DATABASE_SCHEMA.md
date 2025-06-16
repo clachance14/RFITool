@@ -25,9 +25,18 @@ Projects & RFIs
 
 Client Access
 ├── client_sessions (Secure client access tokens)
-└── Subscription Management
-    ├── plans (Subscription plans)
-    └── company_subscriptions (Company billing)
+├── client_rfi_responses (Client responses to RFIs)
+├── client_rfi_attachments (Client file uploads)
+└── client_rfi_links (Secure client links)
+
+New Features (June 2025)
+├── notifications (Real-time notification system)
+├── rfi_timesheet_entries (Cost tracking timesheet entries)
+└── rfi_timesheet_summary (Aggregated cost summaries)
+
+Subscription Management
+├── plans (Subscription plans)
+└── company_subscriptions (Company billing)
 ```
 
 ---
@@ -360,5 +369,160 @@ Key Fields:
 
 ---
 
-*Last Updated: $(date)*
-*Schema Version: Production* 
+## New Features (June 2025)
+
+### Notification System
+
+#### `notifications`
+**Purpose**: Real-time notification system for RFI activities
+```sql
+Key Fields:
+- id (uuid) - Primary key
+- rfi_id (uuid) - References rfis.id
+- type (varchar) - Notification type (response_received, status_changed, etc.)
+- message (text) - Notification message content
+- metadata (jsonb) - Additional notification data
+- is_read (boolean) - Read status
+- created_at/updated_at - Timestamps
+
+Notification Types:
+- response_received - Client submitted a response
+- status_changed - RFI status was updated
+- overdue_reminder - RFI is overdue
+- link_generated - Secure client link was created
+
+RLS Policies:
+- Users can only see notifications for RFIs in their company
+- Notifications are automatically filtered by company_id via RFI relationship
+```
+
+### Cost Tracking System
+
+#### `rfi_timesheet_entries`
+**Purpose**: Detailed timesheet entries for actual RFI costs
+```sql
+Key Fields:
+- id (uuid) - Primary key
+- rfi_id (uuid) - References rfis.id
+- timesheet_number (varchar) - Unique identifier per RFI
+- labor_hours (decimal) - Hours worked
+- labor_cost (decimal) - Cost of labor
+- material_cost (decimal) - Material expenses
+- subcontractor_cost (decimal) - External contractor costs
+- equipment_cost (decimal) - Equipment costs
+- description (text) - Entry description
+- entry_date (date) - Date of work
+- created_by (uuid) - References users.id
+- created_at/updated_at - Timestamps
+
+Constraints:
+- Unique constraint on (rfi_id, timesheet_number)
+- All cost fields default to 0
+- Entry date is required
+
+RLS Policies:
+- Users can only access timesheet entries for RFIs in their company
+- Cost data is protected by company-based access control
+```
+
+#### `rfi_timesheet_summary`
+**Purpose**: Aggregated view of timesheet costs per RFI
+```sql
+This is a PostgreSQL VIEW that provides:
+- rfi_id (uuid) - RFI identifier
+- total_entries (integer) - Number of timesheet entries
+- total_labor_hours (decimal) - Sum of all labor hours
+- total_labor_cost (decimal) - Sum of all labor costs
+- total_material_cost (decimal) - Sum of all material costs
+- total_subcontractor_cost (decimal) - Sum of all subcontractor costs
+- total_equipment_cost (decimal) - Sum of all equipment costs
+- total_cost (decimal) - Sum of all costs
+- first_entry_date (date) - Earliest entry date
+- last_entry_date (date) - Latest entry date
+
+Usage:
+- Used by TimesheetTracker component for cost summaries
+- Provides real-time cost calculations
+- Automatically updates when timesheet entries change
+```
+
+### Enhanced Client System Tables
+
+#### `client_rfi_responses`
+**Purpose**: Client responses to RFIs with enhanced metadata
+```sql
+Key Fields:
+- id (uuid) - Primary key
+- rfi_id (uuid) - References rfis.id
+- client_name (varchar) - Name of responding client
+- client_company (varchar) - Client's company
+- client_email (varchar) - Client's email
+- response_text (text) - The actual response
+- response_status (varchar) - approved/rejected/needs_clarification
+- response_date (timestamp) - When response was submitted
+- client_session_token (varchar) - Session identifier
+- metadata (jsonb) - Additional response data
+
+Integration:
+- Triggers notifications when responses are submitted
+- Linked to secure client access system
+- Protected by RLS policies
+```
+
+#### `client_rfi_attachments`
+**Purpose**: File attachments uploaded by clients
+```sql
+Key Fields:
+- id (uuid) - Primary key
+- rfi_id (uuid) - References rfis.id
+- file_name (varchar) - Original file name
+- file_path (varchar) - Storage path
+- file_size (integer) - File size in bytes
+- file_type (varchar) - MIME type
+- uploaded_by_client (varchar) - Client identifier
+- client_session_token (varchar) - Session identifier
+- upload_date (timestamp) - When uploaded
+- is_verified (boolean) - Verification status
+
+Security:
+- Files are stored securely with access control
+- Virus scanning integration ready
+- Audit trail for all file operations
+```
+
+#### `client_rfi_links`
+**Purpose**: Secure time-limited links for client access
+```sql
+Key Fields:
+- id (uuid) - Primary key
+- rfi_id (uuid) - References rfis.id
+- token (varchar) - Secure access token
+- client_email (varchar) - Intended recipient
+- expires_at (timestamp) - Link expiration
+- created_by (uuid) - References users.id
+- created_at (timestamp) - Creation time
+- last_accessed_at (timestamp) - Last usage
+- access_count (integer) - Usage tracking
+- is_active (boolean) - Link status
+
+Features:
+- Secure token generation with expiration
+- Access tracking and logging
+- Single-use or multi-use link options
+- Automatic cleanup of expired links
+```
+
+### Database Migration Scripts
+
+The following migration scripts implement the new features:
+
+1. **`scripts/add-timesheet-tracking.sql`** - Creates timesheet tables and RLS policies
+2. **`scripts/fix-client-response-schema.sql`** - Adds notification system and enhances client tables
+3. **`scripts/add-field-work-columns.sql`** - Additional field work tracking
+4. **`scripts/fix-client-attachments-schema.sql`** - Enhanced client attachment handling
+5. **`scripts/fix-workflow-stages.sql`** - RFI workflow improvements
+
+---
+
+*Last Updated: June 16, 2025*
+*Schema Version: Production with June 2025 Enhancements* 

@@ -7,6 +7,7 @@ import { useRFIs } from '@/hooks/useRFIs';
 import type { RFI, RFIAttachment } from '@/lib/types';
 import { PermissionButton } from '@/components/PermissionButton';
 import { ClientResponseForm } from '@/components/client/ClientResponseForm';
+import { TimesheetTracker } from '@/components/rfi/TimesheetTracker';
 
 interface RFIFormalViewProps {
   rfi: RFI;
@@ -16,6 +17,7 @@ interface RFIFormalViewProps {
   clientToken?: string;
   clientName?: string;
   clientEmail?: string;
+  onResponseSubmit?: (response: string, attachments: any[]) => void;
 }
 
 interface AttachmentPreviewModalProps {
@@ -55,7 +57,7 @@ function AttachmentPreviewModal({ attachment, isOpen, onClose }: AttachmentPrevi
   );
 }
 
-export function RFIFormalView({ rfi: initialRfi, includeAttachmentsInPDF = false, isReadOnly = false, isClientView = false, clientToken, clientName, clientEmail }: RFIFormalViewProps) {
+export function RFIFormalView({ rfi: initialRfi, includeAttachmentsInPDF = false, isReadOnly = false, isClientView = false, clientToken, clientName, clientEmail, onResponseSubmit }: RFIFormalViewProps) {
   const { projects } = useProjects();
   const { submitResponse } = useRFIs();
   const [rfi, setRfi] = useState<RFI>(initialRfi);
@@ -369,6 +371,13 @@ export function RFIFormalView({ rfi: initialRfi, includeAttachmentsInPDF = false
               </div>
             )}
 
+            {/* Timesheet Cost Tracking Section - Hidden in formal view, available in detail view */}
+            {false && !isClientView && rfi.status !== 'draft' && (
+              <div className="px-8 py-6 border-b border-gray-200 print:hidden">
+                <TimesheetTracker rfiId={rfi.id} isReadOnly={isReadOnly || rfi.status === 'closed'} />
+              </div>
+            )}
+
             {/* RFI Content Section */}
             <div className="px-8 py-6 border-b border-gray-200">
               <h2 className="text-lg font-bold text-gray-900 mb-4 pb-2 border-b border-gray-300">
@@ -510,22 +519,70 @@ export function RFIFormalView({ rfi: initialRfi, includeAttachmentsInPDF = false
                       ) : attachment.file_type?.includes('pdf') && attachment.public_url ? (
                         <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded">
                           <p className="text-sm text-gray-700">
-                            📄 PDF document attached. File can be accessed separately.
+                            📄 PDF document attached.
                           </p>
-                          <p className="text-xs text-gray-500 mt-1">
-                            URL: {attachment.public_url}
+                          <div className="flex items-center space-x-4 mt-2">
+                            <a
+                              href={attachment.public_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center space-x-1 text-blue-600 hover:text-blue-800 text-sm"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                              </svg>
+                              <span>Download PDF</span>
+                            </a>
+                            <a
+                              href={attachment.public_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center space-x-1 text-green-600 hover:text-green-800 text-sm"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                              </svg>
+                              <span>View PDF</span>
+                            </a>
+                          </div>
+                        </div>
+                      ) : attachment.public_url ? (
+                        <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded">
+                          <p className="text-sm text-gray-700">
+                            📎 File attached.
                           </p>
+                          <div className="flex items-center space-x-4 mt-2">
+                            <a
+                              href={attachment.public_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center space-x-1 text-blue-600 hover:text-blue-800 text-sm"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                              </svg>
+                              <span>Download</span>
+                            </a>
+                            {attachment.file_type?.includes('image') && (
+                              <button
+                                onClick={() => openPreview(attachment)}
+                                className="inline-flex items-center space-x-1 text-green-600 hover:text-green-800 text-sm"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                </svg>
+                                <span>Preview</span>
+                              </button>
+                            )}
+                          </div>
                         </div>
                       ) : (
                         <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded">
                           <p className="text-sm text-gray-700">
-                            📎 File attached. Download required to view contents.
+                            📎 File attached. No download link available.
                           </p>
-                          {attachment.public_url && (
-                            <p className="text-xs text-gray-500 mt-1">
-                              URL: {attachment.public_url}
-                            </p>
-                          )}
                         </div>
                       )}
                     </div>
@@ -546,6 +603,7 @@ export function RFIFormalView({ rfi: initialRfi, includeAttachmentsInPDF = false
                     clientEmail={clientEmail}
                     onResponseSubmit={(response, attachments) => {
                       setRfi(prev => ({ ...prev, response: response, stage: 'response_received' }));
+                      onResponseSubmit?.(response, attachments);
                     }}
                   />
                 ) : (
@@ -644,6 +702,13 @@ export function RFIFormalView({ rfi: initialRfi, includeAttachmentsInPDF = false
           </div>
         </div>
       </div>
+
+      {/* Attachment Preview Modal */}
+      <AttachmentPreviewModal
+        attachment={previewAttachment}
+        isOpen={isPreviewOpen}
+        onClose={closePreview}
+      />
     </>
   );
 } 

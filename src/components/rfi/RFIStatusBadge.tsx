@@ -57,7 +57,6 @@ export function RFIStatusDisplay({ status, stage, showDescription = false, layou
     <div className={containerClass}>
       {/* Status */}
       <div className="flex items-center gap-2">
-        <span className="text-lg">{statusConfig.icon}</span>
         <div>
           <div className="font-semibold text-gray-900">{statusConfig.label}</div>
           {showDescription && (
@@ -69,7 +68,6 @@ export function RFIStatusDisplay({ status, stage, showDescription = false, layou
       {/* Stage */}
       {stage && stageConfig && (
         <div className="flex items-center gap-2">
-          <span className="text-lg">📍</span>
           <div>
             <div className="font-semibold text-gray-900">{stageConfig.label}</div>
             {showDescription && (
@@ -89,55 +87,100 @@ interface RFIProgressProps {
 }
 
 export function RFIProgress({ status, stage }: RFIProgressProps) {
-  // Define the typical workflow stages
-  const workflowStages: (RFIStage | null)[] = [
-    null, // Draft
-    'sent_to_client',
-    'awaiting_response',
-    'response_received',
-    'field_work_in_progress',
-    'work_completed'
+  // Define the typical workflow stages with labels
+  const workflowStages: Array<{ stage: RFIStage | null; label: string }> = [
+    { stage: null, label: 'Draft' },
+    { stage: 'sent_to_client', label: 'Sent to Client' },
+    { stage: 'awaiting_response', label: 'Awaiting Response' },
+    { stage: 'response_received', label: 'Response Received' },
+    { stage: 'field_work_in_progress', label: 'Field Work' },
+    { stage: 'work_completed', label: 'Completed' }
   ];
 
   const getCurrentStageIndex = (): number => {
     if (status === 'draft') return 0;
+    
+    // If RFI is closed, show as completed (last stage)
+    if (status === 'closed') {
+      // If it was closed after response received (no field work), show as completed
+      if (stage === 'response_received') {
+        return workflowStages.length - 1; // Show as "Completed"
+      }
+      // If it went through field work, also show as completed
+      if (stage === 'work_completed' || stage === 'field_work_in_progress') {
+        return workflowStages.length - 1; // Show as "Completed"
+      }
+    }
+    
     if (!stage) return 0;
-    const index = workflowStages.indexOf(stage);
+    const index = workflowStages.findIndex(ws => ws.stage === stage);
     return index === -1 ? 0 : index;
   };
 
   const currentStageIndex = getCurrentStageIndex();
+  const isClosedRFI = status === 'closed';
 
   return (
-    <div className="flex items-center space-x-2">
-      {workflowStages.map((workflowStage, index) => {
-        const isActive = index === currentStageIndex;
-        const isCompleted = index < currentStageIndex;
-        const stageConfig = workflowStage ? getStageDisplay(workflowStage) : { label: 'Draft' };
-        
-        return (
-          <React.Fragment key={index}>
-            <div
-              className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium ${
-                isActive
-                  ? 'bg-blue-500 text-white'
-                  : isCompleted
-                  ? 'bg-green-500 text-white'
-                  : 'bg-gray-200 text-gray-600'
-              }`}
-            >
-              {isCompleted ? '✓' : index + 1}
-            </div>
-            {index < workflowStages.length - 1 && (
+    <div className="space-y-3">
+      {/* Progress circles with connecting lines */}
+      <div className="flex items-center justify-between">
+        {workflowStages.map((workflowStage, index) => {
+          const isActive = index === currentStageIndex && !isClosedRFI;
+          const isCompleted = index < currentStageIndex || (isClosedRFI && index <= currentStageIndex);
+          
+          return (
+            <div key={index} className="flex items-center flex-1">
               <div
-                className={`w-8 h-1 ${
-                  isCompleted ? 'bg-green-500' : 'bg-gray-200'
+                className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium ${
+                  isActive
+                    ? 'bg-blue-500 text-white'
+                    : isCompleted
+                    ? 'bg-green-500 text-white'
+                    : 'bg-gray-200 text-gray-600'
                 }`}
-              />
-            )}
-          </React.Fragment>
-        );
-      })}
+              >
+                {isCompleted || (isClosedRFI && index <= currentStageIndex) ? '✓' : index + 1}
+              </div>
+              {index < workflowStages.length - 1 && (
+                <div
+                  className={`flex-1 h-1 mx-2 ${
+                    isCompleted || (isClosedRFI && index < currentStageIndex) ? 'bg-green-500' : 'bg-gray-200'
+                  }`}
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
+      
+      {/* Stage labels aligned with circles */}
+      <div className="flex items-center justify-between">
+        {workflowStages.map((workflowStage, index) => {
+          const isActive = index === currentStageIndex && !isClosedRFI;
+          const isCompleted = index < currentStageIndex || (isClosedRFI && index <= currentStageIndex);
+          
+          return (
+            <div key={index} className="flex-1 flex items-center">
+              <div className="w-8 text-center">
+                <span
+                  className={`text-xs font-medium block ${
+                    isActive
+                      ? 'text-blue-600'
+                      : isCompleted
+                      ? 'text-green-600'
+                      : 'text-gray-500'
+                  }`}
+                >
+                  {workflowStage.label}
+                </span>
+              </div>
+              {index < workflowStages.length - 1 && (
+                <div className="flex-1 mx-2" />
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 } 

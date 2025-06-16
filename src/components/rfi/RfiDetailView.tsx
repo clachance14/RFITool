@@ -10,6 +10,7 @@ import { PermissionButton } from '@/components/PermissionButton';
 import { EmailTemplateService } from '@/services/emailTemplateService';
 import { EmailTemplateModal } from '@/components/rfi/EmailTemplateModal';
 import { RFIStatusDisplay, RFIProgress } from '@/components/rfi/RFIStatusBadge';
+import { TimesheetTracker } from '@/components/rfi/TimesheetTracker';
 
 interface RfiDetailViewProps {
   rfi: RFI;
@@ -681,6 +682,27 @@ export function RfiDetailView({ rfi: initialRfi, hidePrintElements = false, incl
               )}
             </div>
           )}
+
+          {/* Timesheet Cost Tracking Section - ALWAYS VISIBLE FOR TESTING */}
+          <div className="px-8 py-6 border-b border-gray-200 bg-red-50">
+            {/* Debug info - remove after testing */}
+            <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
+              <h4 className="font-medium text-yellow-800">🔍 DEBUG INFO - TESTING MODE:</h4>
+              <div className="text-sm text-yellow-700 mt-2">
+                <p><strong>RFI Status:</strong> {rfi.status}</p>
+                <p><strong>RFI ID:</strong> {rfi.id}</p>
+                <p><strong>Hide Print Elements:</strong> {hidePrintElements.toString()}</p>
+                <p><strong>Show Timesheet Condition:</strong> {(rfi.status !== 'draft' && !hidePrintElements).toString()}</p>
+                <p><strong>Component Should Render:</strong> YES (forced for testing)</p>
+              </div>
+            </div>
+            
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded mb-4">
+              <p className="text-blue-800 font-medium">🧪 TESTING: TimesheetTracker component should appear below:</p>
+            </div>
+            
+            <TimesheetTracker rfiId={rfi.id} isReadOnly={rfi.status === 'closed'} />
+          </div>
 
           {/* RFI Content Section */}
           <div className="px-8 py-6 border-b border-gray-200">

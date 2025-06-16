@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { User, Lock, Mail, Building, Shield, Eye, EyeOff, Check, X } from 'lucide-react';
+import { User, Lock, Mail, Building, Shield, Eye, EyeOff, Check, X, RefreshCw, AlertCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 
@@ -13,8 +13,13 @@ interface UserProfile {
   company_name: string;
   role_name: string;
   role_id: number;
-  last_sign_in: string;
   created_at: string;
+}
+
+interface LoadProfileError {
+  step: string;
+  message: string;
+  details?: any;
 }
 
 export default function ProfilePage() {
@@ -22,6 +27,7 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [detailedError, setDetailedError] = useState<LoadProfileError | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const router = useRouter();
 
@@ -37,16 +43,30 @@ export default function ProfilePage() {
   }, []);
 
   const loadProfile = async () => {
+    setLoading(true);
+    setError(null);
+    setDetailedError(null);
+
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      // Step 1: Check authentication
+      console.log('Step 1: Checking authentication...');
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      
+      if (authError) {
+        console.error('Authentication error:', authError);
+        throw { step: 'Authentication', message: 'Authentication failed', details: authError };
+      }
+
       if (!user) {
+        console.log('No authenticated user found, redirecting to login');
         router.push('/login');
         return;
       }
 
-      console.log('Loading profile for user:', user.id);
+      console.log('✓ User authenticated:', user.id);
 
-      // Get user profile with company and role information using separate queries for better reliability
+      // Step 2: Get company_users data
+      console.log('Step 2: Fetching company_users data...');
       const { data: companyUserData, error: companyUserError } = await supabase
         .from('company_users')
         .select('user_id, role_id, company_id')
@@ -54,23 +74,37 @@ export default function ProfilePage() {
         .single();
 
       if (companyUserError) {
-        console.error('Error fetching company_users:', companyUserError);
-        throw new Error(`Company user data not found: ${companyUserError.message}`);
+        console.error('Company users error:', companyUserError);
+        throw { 
+          step: 'Company Users', 
+          message: 'Failed to find your company association', 
+          details: companyUserError 
+        };
       }
 
-      // Get user details
+      console.log('✓ Company users data:', companyUserData);
+
+      // Step 3: Get user details
+      console.log('Step 3: Fetching user details...');
       const { data: userData, error: userError } = await supabase
         .from('users')
-        .select('id, email, full_name, created_at, last_sign_in_at')
+        .select('id, email, full_name, created_at')
         .eq('id', user.id)
         .single();
 
       if (userError) {
-        console.error('Error fetching user data:', userError);
-        throw new Error(`User data not found: ${userError.message}`);
+        console.error('User data error:', userError);
+        throw { 
+          step: 'User Data', 
+          message: 'Failed to load your user information', 
+          details: userError 
+        };
       }
 
-      // Get company details
+      console.log('✓ User data:', userData);
+
+      // Step 4: Get company details
+      console.log('Step 4: Fetching company details...');
       const { data: companyData, error: companyError } = await supabase
         .from('companies')
         .select('id, name')
@@ -78,13 +112,18 @@ export default function ProfilePage() {
         .single();
 
       if (companyError) {
-        console.error('Error fetching company data:', companyError);
-        throw new Error(`Company data not found: ${companyError.message}`);
+        console.error('Company data error:', companyError);
+        throw { 
+          step: 'Company Data', 
+          message: 'Failed to load your company information', 
+          details: companyError 
+        };
       }
 
-      console.log('Profile data loaded:', { companyUserData, userData, companyData });
+      console.log('✓ Company data:', companyData);
 
-      // Get role name
+      // Step 5: Build profile object
+      console.log('Step 5: Building profile object...');
       const roleNames = {
         0: 'Super Admin',
         1: 'Admin', 
@@ -99,17 +138,24 @@ export default function ProfilePage() {
         email: userData.email,
         full_name: userData.full_name || '',
         company_name: companyData.name,
-        role_name: roleNames[companyUserData.role_id as keyof typeof roleNames] || 'Unknown',
+        role_name: roleNames[companyUserData.role_id as keyof typeof roleNames] || `Role ${companyUserData.role_id}`,
         role_id: companyUserData.role_id,
-        last_sign_in: userData.last_sign_in_at || 'Never',
         created_at: userData.created_at
       };
 
+      console.log('✓ Profile loaded successfully:', userProfile);
       setProfile(userProfile);
       setFullName(userProfile.full_name);
-    } catch (err) {
+
+    } catch (err: any) {
       console.error('Error loading profile:', err);
-      setError('Failed to load profile information');
+      
+      if (err.step) {
+        setDetailedError(err);
+        setError(`Failed at step: ${err.step}. ${err.message}`);
+      } else {
+        setError('Failed to load profile information. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -199,8 +245,53 @@ export default function ProfilePage() {
   if (!profile) {
     return (
       <div className="container mx-auto px-4 py-8">
-        <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg">
-          <p>Failed to load profile information. Please try refreshing the page.</p>
+        <div className="bg-red-50 border border-red-200 text-red-600 px-6 py-4 rounded-lg">
+          <div className="flex items-start">
+            <AlertCircle className="w-5 h-5 mr-3 mt-0.5 flex-shrink-0" />
+            <div className="flex-1">
+              <h3 className="font-medium text-red-800 mb-2">Failed to Load Profile</h3>
+              <p className="text-red-700 mb-3">
+                {error || 'Unable to load your profile information.'}
+              </p>
+              
+              {detailedError && (
+                <div className="bg-red-100 border border-red-300 rounded p-3 mb-3">
+                  <p className="text-sm font-medium text-red-800">Debug Information:</p>
+                  <p className="text-sm text-red-700 mt-1">
+                    <strong>Failed Step:</strong> {detailedError.step}
+                  </p>
+                  <p className="text-sm text-red-700">
+                    <strong>Error:</strong> {detailedError.message}
+                  </p>
+                  {detailedError.details && (
+                    <p className="text-sm text-red-700">
+                      <strong>Details:</strong> {JSON.stringify(detailedError.details, null, 2)}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <div className="flex space-x-3">
+                <Button 
+                  onClick={loadProfile}
+                  disabled={loading}
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center"
+                >
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Retry
+                </Button>
+                <Button 
+                  onClick={() => router.push('/dashboard')}
+                  variant="outline"
+                  size="sm"
+                >
+                  Back to Dashboard
+                </Button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -371,12 +462,6 @@ export default function ProfilePage() {
             <span className="font-medium text-gray-700">Account Created:</span>
             <span className="ml-2 text-gray-600">
               {new Date(profile.created_at).toLocaleDateString()}
-            </span>
-          </div>
-          <div>
-            <span className="font-medium text-gray-700">Last Sign In:</span>
-            <span className="ml-2 text-gray-600">
-              {profile.last_sign_in === 'Never' ? 'Never' : new Date(profile.last_sign_in).toLocaleString()}
             </span>
           </div>
         </div>

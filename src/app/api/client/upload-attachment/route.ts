@@ -1,5 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@supabase/supabase-js';
+
+// Use service role client to bypass RLS
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  }
+);
 
 interface ClientUploadRequest {
   file: File;
@@ -7,6 +19,62 @@ interface ClientUploadRequest {
   client_token: string;
   client_uploaded_by: string;
   attachment_category: string;
+}
+
+// Validate a secure link token (matching the main RFI endpoint)
+async function validateToken(token: string): Promise<{
+  valid: boolean;
+  rfi?: any;
+  reason?: string;
+}> {
+  try {
+    const { data: rfi, error } = await supabaseAdmin
+      .from('rfis')
+      .select(`
+        *,
+        projects!inner(
+          id,
+          project_name,
+          client_company_name,
+          contractor_job_number
+        )
+      `)
+      .eq('secure_link_token', token)
+      .single();
+
+    if (error || !rfi) {
+      return {
+        valid: false,
+        reason: 'Invalid or expired link'
+      };
+    }
+
+    // Check if link has expired
+    if (rfi.link_expires_at && new Date(rfi.link_expires_at) < new Date()) {
+      return {
+        valid: false,
+        reason: 'Link has expired'
+      };
+    }
+
+    // Check if RFI has already been responded to
+    if (rfi.status === 'responded' && !rfi.allow_multiple_responses) {
+      return {
+        valid: false,
+        reason: 'This RFI has already been responded to'
+      };
+    }
+
+    return {
+      valid: true,
+      rfi
+    };
+  } catch (error) {
+    return {
+      valid: false,
+      reason: 'Failed to validate link'
+    };
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -22,18 +90,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate client session
-    const { data: sessionData, error: sessionError } = await supabase
-      .rpc('validate_client_session', { p_token: clientToken });
-
-    if (sessionError || !sessionData || sessionData.length === 0 || !sessionData[0].is_valid) {
+    // Validate client token using the same method as the main RFI endpoint
+    const validation = await validateToken(clientToken);
+    if (!validation.valid) {
       return NextResponse.json(
-        { error: 'Invalid or expired client session' },
+        { error: validation.reason || 'Invalid token' },
         { status: 401 }
       );
     }
 
-    const session = sessionData[0];
+    const rfi = validation.rfi;
     
     // Parse form data
     const formData = await request.formData();
@@ -49,10 +115,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate RFI ID matches session
-    if (rfiId !== session.rfi_id) {
+    // Validate RFI ID matches token
+    if (rfiId !== rfi.id) {
       return NextResponse.json(
-        { error: 'RFI ID does not match client session' },
+        { error: 'RFI ID does not match client token' },
         { status: 403 }
       );
     }
@@ -88,7 +154,7 @@ export async function POST(request: NextRequest) {
 
     try {
       // Upload to Supabase Storage
-      const { data: uploadData, error: uploadError } = await supabase.storage
+      const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
         .from('rfi-attachments')
         .upload(uniqueFileName, file, {
           cacheControl: '3600',
@@ -104,29 +170,28 @@ export async function POST(request: NextRequest) {
       }
 
       // Get public URL
-      const { data: { publicUrl } } = supabase.storage
+      const { data: { publicUrl } } = supabaseAdmin.storage
         .from('rfi-attachments')
         .getPublicUrl(uploadData.path);
 
-      // Insert attachment record with client-specific fields
-      const { data: attachmentData, error: attachmentError } = await supabase
+      // Insert attachment record with client-specific fields (they exist in the schema)
+      const { data: attachmentData, error: attachmentError } = await supabaseAdmin
         .from('rfi_attachments')
         .insert({
           rfi_id: rfiId,
           file_name: file.name,
           file_path: uploadData.path,
           file_size_bytes: file.size,
-          file_size: file.size, // Also populate the new field
+          file_size: file.size,
           file_type: file.type,
           public_url: publicUrl,
-          // Client-specific fields
+          // Client-specific fields (these columns exist in the database)
           uploaded_by_type: 'client',
           client_session_token: clientToken,
           attachment_category: attachmentCategory || 'client_response',
           client_uploaded_by: clientUploadedBy || clientEmail || 'Client User',
           is_visible_to_client: true,
-          virus_scan_status: 'pending', // Will be updated by virus scanning process
-          uploaded_by: 'client-session' // Placeholder for uploaded_by field
+          uploaded_by: null // Make this nullable since it's a UUID field for users
         })
         .select()
         .single();
@@ -135,7 +200,7 @@ export async function POST(request: NextRequest) {
         console.error('Database insert error:', attachmentError);
         
         // Clean up uploaded file if database insert fails
-        await supabase.storage
+        await supabaseAdmin.storage
           .from('rfi-attachments')
           .remove([uploadData.path]);
 
@@ -145,31 +210,30 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Log the upload in audit trail
-      await supabase
-        .from('rfi_attachment_audit')
-        .insert({
-          attachment_id: attachmentData.id,
-          rfi_id: rfiId,
-          action: 'uploaded',
-          performed_by: clientUploadedBy || clientEmail || 'Client User',
-          performed_by_type: 'client',
-          client_session_token: clientToken,
-          ip_address: request.ip || null,
-          user_agent: request.headers.get('user-agent') || null,
-          details: {
-            file_name: file.name,
-            file_size: file.size,
-            file_type: file.type,
-            category: attachmentCategory
-          }
-        });
-
-      // Update client session last accessed
-      await supabase
-        .from('client_sessions')
-        .update({ last_accessed: new Date().toISOString() })
-        .eq('token', clientToken);
+      // Log the upload in audit trail (optional - may not exist yet)
+      try {
+        await supabaseAdmin
+          .from('rfi_attachment_audit')
+          .insert({
+            attachment_id: attachmentData.id,
+            rfi_id: rfiId,
+            action: 'uploaded',
+            performed_by: clientUploadedBy || clientEmail || 'Client User',
+            performed_by_type: 'client',
+            client_session_token: clientToken,
+            ip_address: request.ip || null,
+            user_agent: request.headers.get('user-agent') || null,
+            details: {
+              file_name: file.name,
+              file_size: file.size,
+              file_type: file.type,
+              category: attachmentCategory
+            }
+          });
+      } catch (auditError) {
+        // Audit logging is optional - don't fail the upload if it doesn't work
+        console.warn('Audit logging failed:', auditError);
+      }
 
       return NextResponse.json({
         success: true,
@@ -191,7 +255,7 @@ export async function POST(request: NextRequest) {
     }
 
   } catch (error) {
-    console.error('Client upload API error:', error);
+    console.error('Upload endpoint error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

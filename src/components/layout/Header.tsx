@@ -4,6 +4,7 @@ import { Bell, User } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { NotificationBell } from '@/components/notifications/NotificationBell';
 
 // Role display mapping with colors
 const ROLE_STYLES = {
@@ -90,10 +91,7 @@ export default function Header() {
         <span className="text-2xl font-bold tracking-wide text-gray-800">RFITrak</span>
       </div>
       <div className="flex items-center space-x-6">
-        <button className="relative p-2 rounded-full hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
-          <Bell className="h-6 w-6 text-gray-500" />
-          <span className="sr-only">View notifications</span>
-        </button>
+        <NotificationBell />
         <div className="flex items-center space-x-4">
           {/* Role Badge - Prominent Display */}
           {currentRole && (
