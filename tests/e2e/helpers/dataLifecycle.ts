@@ -222,7 +222,15 @@ export class DataLifecycleTracker {
   exportTestData(): {
     rfis: RFITestData[];
     auditLog: AuditLogEntry[];
-    summary: ReturnType<typeof this.generateCompletionReport>;
+    summary: {
+      totalRFIs: number;
+      byStatus: Record<string, number>;
+      byUrgency: Record<string, number>;
+      byStage: Record<string, number>;
+      totalCostImpact: number;
+      auditTrailLength: number;
+      userActivity: Record<string, number>;
+    };
   } {
     return {
       rfis: this.getAllRFIs(),
