@@ -421,6 +421,7 @@ export function useRFIs() {
             project_id: rfiData.project_id,
             subject: rfiData.subject,
             description: rfiData.contractor_question || '',
+            proposed_solution: rfiData.contractor_proposed_solution || undefined,
             status: rfiData.status as any,
             stage: rfiData.stage || null,
             priority: 'medium' as any, // Default priority
@@ -535,6 +536,7 @@ export function useRFIs() {
         project_id: data.project_id,
         subject: data.subject,
         description: data.contractor_question || '',
+        proposed_solution: data.contractor_proposed_solution || undefined,
         status: data.status as any,
         stage: data.stage || null,
         priority: 'medium' as any, // Default priority

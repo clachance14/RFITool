@@ -760,8 +760,7 @@ Thanks,
               <h3 className="font-semibold text-gray-700 mb-2">Contractor Proposed Solution:</h3>
               <div className="bg-gray-50 p-4 rounded border">
                 <p className="text-gray-900 whitespace-pre-wrap">
-                  {/* This would come from form data - using placeholder for now */}
-                  No proposed solution provided.
+                  {rfi.proposed_solution || 'No proposed solution provided.'}
                 </p>
               </div>
             </div>
