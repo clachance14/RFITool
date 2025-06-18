@@ -34,17 +34,17 @@ async function validateToken(token: string) {
       .single();
 
     if (error || !rfi) {
-      return { valid: false, reason: 'Invalid or expired token' };
+      return { valid: false, reason: 'Invalid or expired token', rfi: null };
     }
 
     // Check if response has been submitted
     if (!rfi.client_response || rfi.stage !== 'response_received') {
-      return { valid: false, reason: 'No response submitted for this RFI' };
+      return { valid: false, reason: 'No response submitted for this RFI', rfi: null };
     }
 
-    return { valid: true, rfi };
+    return { valid: true, rfi, reason: null };
   } catch (error) {
-    return { valid: false, reason: 'Token validation failed' };
+    return { valid: false, reason: 'Token validation failed', rfi: null };
   }
 }
 
@@ -65,7 +65,7 @@ export async function GET(
 
     // Validate token and get RFI data
     const validation = await validateToken(token);
-    if (!validation.valid) {
+    if (!validation.valid || !validation.rfi) {
       return NextResponse.json(
         { success: false, error: validation.reason || 'Invalid token' },
         { status: 400 }
