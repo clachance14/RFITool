@@ -41,7 +41,7 @@ export function ProjectFormWithLogos({
     project_description: initialData?.project_description || '',
     client_logo_url: initialData?.client_logo_url || '',
     default_urgency: initialData?.default_urgency || 'non-urgent',
-
+    standard_recipients: initialData?.standard_recipients || [],
     project_disciplines: initialData?.project_disciplines || [],
   });
 
@@ -248,6 +248,19 @@ export function ProjectFormWithLogos({
             </Select>
           </div>
 
+          <div>
+            <Label htmlFor="standard_recipients">Standard Recipients (Email addresses, one per line)</Label>
+            <Textarea
+              id="standard_recipients"
+              value={formData.standard_recipients.join('\n')}
+              onChange={(e) => handleChange('standard_recipients', e.target.value.split('\n').filter(email => email.trim()))}
+              placeholder="Enter email addresses for default RFI recipients&#10;example1@company.com&#10;example2@company.com"
+              rows={4}
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              These recipients will be included by default on all RFIs for this project
+            </p>
+          </div>
 
         </div>
       </div>
