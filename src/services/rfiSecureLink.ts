@@ -15,6 +15,45 @@ export interface SecureLinkResponse {
 export class RFISecureLinkService {
   private static readonly DEFAULT_EXPIRATION_DAYS = 30;
   private static readonly BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+  private static readonly BASE62_CHARS = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+  /**
+   * Generate a short, secure Base62 token
+   */
+  private static generateShortToken(length: number = 4): string {
+    const bytes = crypto.randomBytes(Math.ceil(length * 3 / 4));
+    let result = '';
+    
+    for (let i = 0; i < bytes.length && result.length < length; i++) {
+      result += this.BASE62_CHARS[bytes[i] % 62];
+    }
+    
+    return result.substring(0, length);
+  }
+
+  /**
+   * Generate contextual short code based on project and RFI data
+   */
+  private static generateContextualToken(projectName: string, rfiNumber: string): string {
+    // Extract project code (first 3 letters, uppercase)
+    const projectCode = projectName
+      .replace(/[^a-zA-Z]/g, '') // Remove non-letters
+      .substring(0, 3)
+      .toUpperCase()
+      .padEnd(3, 'X'); // Pad with X if less than 3 letters
+
+    // Format RFI number (ensure 3 digits)
+    const formattedRfiNumber = rfiNumber.replace(/\D/g, '').padStart(3, '0').substring(0, 3);
+
+    // Get year (last 2 digits)
+    const year = new Date().getFullYear().toString().slice(-2);
+
+    // Generate random suffix for security
+    const randomSuffix = this.generateShortToken(4);
+
+    // Format: "ABC-R001-24-Xy9K" 
+    return `${projectCode}-R${formattedRfiNumber}-${year}-${randomSuffix}`;
+  }
 
   /**
    * Generate a secure link for an RFI
@@ -25,25 +64,34 @@ export class RFISecureLinkService {
   ): Promise<SecureLinkResponse> {
     const { expirationDays = this.DEFAULT_EXPIRATION_DAYS } = options;
     
-    // Generate secure token
-    const token = crypto.randomBytes(32).toString('hex');
+    // First verify the RFI exists and get project data for contextual token
+    const { data: rfiWithProject, error: selectError } = await supabase
+      .from('rfis')
+      .select(`
+        id,
+        rfi_number,
+        projects!inner(
+          project_name
+        )
+      `)
+      .eq('id', rfiId)
+      .single();
+
+    if (selectError || !rfiWithProject) {
+      throw new Error('RFI not found or access denied');
+    }
+
+    // Generate contextual secure token
+    const token = this.generateContextualToken(
+      (rfiWithProject.projects as any).project_name, 
+      rfiWithProject.rfi_number
+    );
     
     // Calculate expiration date
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + expirationDays);
     
-    // First verify the RFI exists and user has access to it
-    const { data: existingRFI, error: selectError } = await supabase
-      .from('rfis')
-      .select('id')
-      .eq('id', rfiId)
-      .single();
-
-    if (selectError || !existingRFI) {
-      throw new Error('RFI not found or access denied');
-    }
-    
-    // Update RFI with secure link token using a more targeted approach
+    // Update RFI with secure link token
     const { error } = await supabase
       .from('rfis')
       .update({

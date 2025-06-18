@@ -235,7 +235,7 @@ export function NotificationBell() {
                         <p className="text-sm font-medium text-gray-900">
                           {notification.rfis?.rfi_number && (
                             <span className="text-blue-600 hover:text-blue-800">
-                              RFI {notification.rfis.rfi_number}
+                              {notification.rfis.rfi_number}
                             </span>
                           )}
                         </p>

@@ -7,6 +7,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import type { RFI, RFIStatus } from '@/lib/types';
 import { RFIStatusBadge } from '@/components/rfi/RFIStatusBadge';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
+import { useUserRole } from '@/hooks/useUserRole';
 import ClientLayoutWrapper from '@/components/layout/ClientLayoutWrapper';
 
 interface ClientRFI {
@@ -28,6 +30,8 @@ interface ClientRFI {
 export default function ClientRFILogPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { user } = useAuth();
+  const { role } = useUserRole();
   const [rfis, setRfis] = useState<ClientRFI[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -37,9 +41,10 @@ export default function ClientRFILogPage() {
   const [statusFilter, setStatusFilter] = useState<RFIStatus | 'all'>('all');
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Check if this is client access
+  // Check if this is client access (either via token or authenticated client user)
   const clientToken = searchParams.get('token') || (typeof window !== 'undefined' ? sessionStorage.getItem('client_token') : null);
-  const isClientAccess = !!(clientToken || searchParams.get('client') === 'true' || (typeof window !== 'undefined' && sessionStorage.getItem('client_session')));
+  const isAuthenticatedClient = user && role === 'client_collaborator';
+  const isClientAccess = !!(clientToken || searchParams.get('client') === 'true' || (typeof window !== 'undefined' && sessionStorage.getItem('client_session')) || isAuthenticatedClient);
 
   useEffect(() => {
     if (!isClientAccess) {
@@ -52,7 +57,9 @@ export default function ClientRFILogPage() {
         setLoading(true);
         setError(null);
 
-        // If we have a client token, use it to determine the company
+        let targetCompanyName = '';
+
+        // Method 1: If we have a client token, use it to determine the company
         if (clientToken) {
           // First validate the token and get company info
           const response = await fetch(`/api/client/rfi/${clientToken}`);
@@ -65,45 +72,68 @@ export default function ClientRFILogPage() {
             throw new Error(tokenData.error || 'Access denied');
           }
 
-          const companyName = tokenData.data.projects.client_company_name;
-          setCompanyName(companyName);
-
-          // Fetch all RFIs for this company
-          const { data: companyRfis, error: rfisError } = await supabase
-            .from('rfis')
+          targetCompanyName = tokenData.data.projects.client_company_name;
+        } 
+        // Method 2: If user is authenticated as client_collaborator, get company from user profile
+        else if (isAuthenticatedClient && user) {
+          // Get user's company from company_users table
+          const { data: companyUser, error: companyUserError } = await supabase
+            .from('company_users')
             .select(`
-              id,
-              rfi_number,
-              subject,
-              status,
-              urgency,
-              created_at,
-              date_responded,
-              client_response,
-              projects!inner (
-                project_name,
-                client_company_name,
-                contractor_job_number
+              companies (
+                name
               )
             `)
-            .eq('projects.client_company_name', companyName)
-            .order('created_at', { ascending: false });
+            .eq('user_id', user.id)
+            .single();
 
-          if (rfisError) {
-            throw new Error('Failed to fetch RFIs');
+          if (companyUserError || !companyUser) {
+            throw new Error('Could not determine your company association');
           }
 
-          // Transform the data to match our interface (projects is returned as array, we need single object)
-          const transformedRfis = (companyRfis || []).map(rfi => ({
-            ...rfi,
-            projects: Array.isArray(rfi.projects) ? rfi.projects[0] : rfi.projects
-          }));
-
-          setRfis(transformedRfis);
+          targetCompanyName = (companyUser.companies as any)?.name || '';
         } else {
-          // Fallback - try to get company from URL params or session
           throw new Error('No valid access method found');
         }
+
+        if (!targetCompanyName) {
+          throw new Error('Could not determine company name');
+        }
+
+        setCompanyName(targetCompanyName);
+
+        // Fetch all RFIs for this company
+        const { data: companyRfis, error: rfisError } = await supabase
+          .from('rfis')
+          .select(`
+            id,
+            rfi_number,
+            subject,
+            status,
+            urgency,
+            created_at,
+            date_responded,
+            client_response,
+            projects!inner (
+              project_name,
+              client_company_name,
+              contractor_job_number
+            )
+          `)
+          .eq('projects.client_company_name', targetCompanyName)
+          .order('created_at', { ascending: false });
+
+        if (rfisError) {
+          throw new Error('Failed to fetch RFIs');
+        }
+
+        // Transform the data to match our interface (projects is returned as array, we need single object)
+        const transformedRfis = (companyRfis || []).map(rfi => ({
+          ...rfi,
+          projects: Array.isArray(rfi.projects) ? rfi.projects[0] : rfi.projects
+        }));
+
+        setRfis(transformedRfis);
       } catch (err) {
         console.error('Error fetching client RFIs:', err);
         setError(err instanceof Error ? err.message : 'Failed to load RFIs');
@@ -113,7 +143,7 @@ export default function ClientRFILogPage() {
     };
 
     fetchClientRFIs();
-  }, [clientToken, isClientAccess, router]);
+  }, [clientToken, isClientAccess, isAuthenticatedClient, user, router]);
 
   const getStatusColor = (status: RFIStatus) => {
     switch (status) {

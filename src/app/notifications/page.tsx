@@ -386,7 +386,7 @@ export default function NotificationsPage() {
                             onClick={() => handleNotificationClick(notification)}
                             className="text-sm font-medium text-blue-600 hover:text-blue-800 cursor-pointer text-left"
                           >
-                            RFI {notification.rfis.rfi_number}: {notification.rfis.subject}
+                            {notification.rfis.rfi_number}: {notification.rfis.subject}
                           </button>
                           <p className="text-xs text-gray-500 mt-1">
                             Project: {notification.rfis.projects.project_name}

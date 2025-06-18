@@ -108,11 +108,7 @@ export function Dashboard() {
                 alt="Client Logo"
                 className="max-w-full max-h-full object-contain"
               />
-            ) : (
-              <div className="bg-gray-200 w-full h-full flex items-center justify-center rounded">
-                <span className="text-xs text-gray-500">No Logo</span>
-              </div>
-            );
+            ) : null;
           })()}
         </div>
       </div>

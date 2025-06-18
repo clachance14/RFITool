@@ -23,7 +23,6 @@ export interface Project {
   
   // Default RFI Settings
   default_urgency: 'urgent' | 'non-urgent';
-  standard_recipients: string[];
   project_disciplines: string[];
   
   // System fields
@@ -354,7 +353,6 @@ export interface CreateProjectInput {
   project_description?: string;
   client_logo_url?: string; // Client logo URL
   default_urgency: 'urgent' | 'non-urgent';
-  standard_recipients: string[];
   project_disciplines: string[];
 }
 

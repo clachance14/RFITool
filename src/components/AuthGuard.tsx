@@ -19,6 +19,7 @@ export default function AuthGuard({ children }: AuthGuardProps) {
   const publicRoutes = [
     '/login',
     '/auth/callback',
+    '/auth/reset-password',
     '/client/logged-out',
   ];
 

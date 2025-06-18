@@ -54,7 +54,7 @@ const mockProject: Project = {
   client_company_name: 'Test Client',
   project_manager_contact: 'pm@test.com',
   default_urgency: 'non-urgent',
-  standard_recipients: [],
+
   project_disciplines: [],
   created_at: '2024-01-01T00:00:00Z',
   updated_at: '2024-01-01T00:00:00Z',

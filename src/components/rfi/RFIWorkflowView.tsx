@@ -149,6 +149,41 @@ export function RFIWorkflowView({ rfi: initialRfi }: RFIWorkflowViewProps) {
     }
   };
 
+  // NEW: Generate default email message
+  const generateDefaultMessage = () => {
+    if (!secureLinkData || !rfi) return '';
+    
+    const shortDomain = new URL(secureLinkData.secure_link).hostname.replace('www.', '');
+    // Use the contextual token directly for a meaningful short reference
+    const shortLink = `${shortDomain}/rfi/${secureLinkData.token}`;
+    const expiryDate = new Date(secureLinkData.expires_at).toLocaleDateString();
+    
+    return `Hi Team,
+
+Please review and respond to ${rfi.rfi_number} - ${rfi.subject}
+
+📋 Project: ${project?.project_name || 'N/A'}
+🔗 Secure Link: ${shortLink}
+⏰ Expires: ${expiryDate}
+
+Click the link above to view the complete RFI details and submit your response.
+
+This is a secure, time-limited link. Please do not share publicly.
+
+Thanks,
+[Your Name]`;
+  };
+
+  // NEW: Copy default message to clipboard
+  const copyMessageToClipboard = () => {
+    const message = generateDefaultMessage();
+    navigator.clipboard.writeText(message).then(() => {
+      alert('Message copied to clipboard!');
+    }).catch(() => {
+      alert('Failed to copy message');
+    });
+  };
+
   return (
     <>
       <AttachmentPreviewModal 
@@ -704,6 +739,27 @@ export function RFIWorkflowView({ rfi: initialRfi }: RFIWorkflowViewProps) {
                 </div>
               </div>
 
+              {/* NEW: Default Message Section */}
+              <div className="border-t pt-4">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-gray-700">Default Email Message</label>
+                  <button
+                    onClick={copyMessageToClipboard}
+                    className="text-xs text-blue-600 hover:text-blue-800 flex items-center"
+                  >
+                    <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002 2h-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                    </svg>
+                    Copy Message
+                  </button>
+                </div>
+                <div className="bg-gray-50 p-3 rounded-lg text-sm">
+                  <div style={{ whiteSpace: 'pre-line' }} className="text-gray-800">
+                    {generateDefaultMessage()}
+                  </div>
+                </div>
+              </div>
+
               <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
                 <div className="flex">
                   <svg className="w-5 h-5 text-yellow-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
@@ -730,7 +786,7 @@ export function RFIWorkflowView({ rfi: initialRfi }: RFIWorkflowViewProps) {
                 </button>
                 <button
                   onClick={() => {
-                    copyLinkToClipboard();
+                    copyMessageToClipboard();
                     setShowLinkModal(false);
                   }}
                   className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"

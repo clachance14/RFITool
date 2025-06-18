@@ -16,6 +16,7 @@ const supabaseAdmin = createClient(
 interface ClientResponseRequest {
   rfi_id: string;
   response: string;
+  responder_name: string;
   client_name: string;
   client_email: string;
   attachment_count: number;
@@ -31,12 +32,17 @@ async function validateToken(token: string): Promise<{
     const { data: rfi, error } = await supabaseAdmin
       .from('rfis')
       .select(`
-        *,
-        projects!inner(
-          id,
+        id,
+        rfi_number,
+        subject,
+        client_response,
+        stage,
+        status,
+        link_expires_at,
+        allow_multiple_responses,
+        projects (
           project_name,
-          client_company_name,
-          contractor_job_number
+          client_company_name
         )
       `)
       .eq('secure_link_token', token)
@@ -103,11 +109,18 @@ export async function POST(request: NextRequest) {
 
     // Parse request body
     const body: ClientResponseRequest = await request.json();
-    const { rfi_id, response, client_name, client_email, attachment_count } = body;
+    const { rfi_id, response, responder_name, client_name, client_email, attachment_count } = body;
 
     if (!rfi_id || !response?.trim()) {
       return NextResponse.json(
         { error: 'RFI ID and response are required' },
+        { status: 400 }
+      );
+    }
+
+    if (!responder_name?.trim()) {
+      return NextResponse.json(
+        { error: 'Responder name is required' },
         { status: 400 }
       );
     }
@@ -134,6 +147,7 @@ export async function POST(request: NextRequest) {
         .from('rfis')
         .update({
           client_response: response,
+          client_response_submitted_by: responder_name,
           date_responded: new Date().toISOString(),
           stage: 'response_received',
           updated_at: new Date().toISOString()
@@ -157,7 +171,7 @@ export async function POST(request: NextRequest) {
           .insert({
             rfi_id: rfi_id,
             action: 'client_response_submitted',
-            performed_by: client_name || client_email || 'Client User',
+            performed_by: responder_name,
             performed_by_type: 'client',
             client_session_token: clientToken,
             old_values: {
@@ -173,6 +187,7 @@ export async function POST(request: NextRequest) {
             details: {
               response_length: response.length,
               attachment_count: attachment_count || 0,
+              responder_name: responder_name,
               client_name: client_name,
               client_email: client_email
             }
@@ -189,8 +204,9 @@ export async function POST(request: NextRequest) {
           .insert({
             rfi_id: updatedRfi.id,
             type: 'response_received',
-            message: `Client response received from ${client_name || client_email || 'Client User'}`,
+            message: `Client response received from ${responder_name} (${client_name || client_email || 'Client User'})`,
             metadata: {
+              responder_name: responder_name,
               client_name: client_name,
               client_email: client_email,
               response_length: response.length,
@@ -209,7 +225,8 @@ export async function POST(request: NextRequest) {
         data: {
           rfi_id: updatedRfi.id,
           response_submitted_at: updatedRfi.date_responded,
-          stage: updatedRfi.stage
+          stage: updatedRfi.stage,
+          submitted_by: responder_name
         }
       });
 

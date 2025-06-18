@@ -167,7 +167,7 @@ export function useProjects() {
         expected_completion: projectData.expected_completion || null,
         project_description: projectData.project_description,
         client_logo_url: projectData.client_logo_url,
-        standard_recipients: projectData.standard_recipients || [],
+  
         project_disciplines: projectData.project_disciplines || [],
         default_urgency: projectData.default_urgency || 'non-urgent',
       };

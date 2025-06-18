@@ -39,7 +39,8 @@ async function validateToken(token: string): Promise<{
           id,
           project_name,
           client_company_name,
-          contractor_job_number
+          contractor_job_number,
+          project_manager_contact
         )
       `)
       .eq('secure_link_token', token)

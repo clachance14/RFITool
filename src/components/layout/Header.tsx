@@ -65,10 +65,10 @@ export default function Header() {
             };
             setUserRole(roleNames[companyUserData.role_id as keyof typeof roleNames] || 'Unknown');
           } else {
-            console.error('Error fetching company data:', companyUserError);
+            console.error('❌ Header: Error fetching company data:', companyUserError);
           }
         } catch (error) {
-          console.error('Error in fetchUserData:', error);
+          console.error('💥 Header: Error in fetchUserData:', error);
         }
       };
       

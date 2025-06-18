@@ -41,7 +41,7 @@ export function ProjectFormWithLogos({
     project_description: initialData?.project_description || '',
     client_logo_url: initialData?.client_logo_url || '',
     default_urgency: initialData?.default_urgency || 'non-urgent',
-    standard_recipients: initialData?.standard_recipients || [''],
+
     project_disciplines: initialData?.project_disciplines || [],
   });
 
@@ -52,10 +52,8 @@ export function ProjectFormWithLogos({
     setError(null);
 
     try {
-      // Filter out empty recipients
       const cleanedData = {
         ...formData,
-        standard_recipients: formData.standard_recipients.filter(email => email.trim() !== ''),
       };
 
       console.log('🔍 Form data being submitted:', cleanedData);
@@ -72,23 +70,7 @@ export function ProjectFormWithLogos({
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleRecipientsChange = (index: number, value: string) => {
-    const newRecipients = [...formData.standard_recipients];
-    newRecipients[index] = value;
-    setFormData(prev => ({ ...prev, standard_recipients: newRecipients }));
-  };
 
-  const addRecipient = () => {
-    setFormData(prev => ({
-      ...prev,
-      standard_recipients: [...prev.standard_recipients, '']
-    }));
-  };
-
-  const removeRecipient = (index: number) => {
-    const newRecipients = formData.standard_recipients.filter((_, i) => i !== index);
-    setFormData(prev => ({ ...prev, standard_recipients: newRecipients }));
-  };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-8 max-w-4xl mx-auto p-6">
@@ -235,7 +217,7 @@ export function ProjectFormWithLogos({
       {/* Logo Section */}
       <div className="bg-white p-6 rounded-lg border border-gray-200">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Logos</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 gap-6">
           <LogoUpload
             currentLogoUrl={formData.client_logo_url}
             onLogoChange={(url) => handleChange('client_logo_url', url || '')}
@@ -243,27 +225,6 @@ export function ProjectFormWithLogos({
             label="Client Logo"
             placeholder="Upload client company logo"
           />
-          
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">
-              Contractor Logo
-            </label>
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <div className="flex items-center">
-                <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
-                  <svg className="w-6 h-6 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
-                  </svg>
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-blue-900">Company Logo</p>
-                  <p className="text-xs text-blue-700">
-                    Your company logo can be managed in the admin settings. It will appear on all RFI documents.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -287,37 +248,7 @@ export function ProjectFormWithLogos({
             </Select>
           </div>
 
-          <div>
-            <Label>Standard Recipients *</Label>
-            <div className="space-y-2">
-              {formData.standard_recipients.map((recipient, index) => (
-                <div key={index} className="flex gap-2">
-                  <Input
-                    type="email"
-                    value={recipient}
-                    onChange={(e) => handleRecipientsChange(index, e.target.value)}
-                    placeholder="recipient@example.com"
-                    className="flex-1"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => removeRecipient(index)}
-                    disabled={formData.standard_recipients.length <= 1}
-                  >
-                    Remove
-                  </Button>
-                </div>
-              ))}
-              <Button
-                type="button"
-                variant="outline"
-                onClick={addRecipient}
-              >
-                Add Recipient
-              </Button>
-            </div>
-          </div>
+
         </div>
       </div>
 

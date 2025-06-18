@@ -31,7 +31,7 @@ describe('useProjects Hook', () => {
       client_company_name: 'Test Company',
       project_manager_contact: 'test@example.com',
       default_urgency: 'non-urgent' as const,
-      standard_recipients: ['test@example.com'],
+  
       project_disciplines: ['HVAC']
     };
 

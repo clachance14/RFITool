@@ -117,7 +117,6 @@ export default function EditProjectPage() {
     project_description: project.project_description || '',
     client_logo_url: project.client_logo_url || '',
     default_urgency: project.default_urgency || 'non-urgent',
-    standard_recipients: project.standard_recipients || [''],
     project_disciplines: project.project_disciplines || [],
   };
 

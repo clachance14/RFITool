@@ -120,18 +120,67 @@ delete_user             |    ✅     |     ❌      |   ❌   |    ❌    |    �
 
 ## Authentication & Authorization Flow
 
+### Domain-Based Company Assignment
+
+RFITrak automatically assigns users to companies based on their email domain:
+
+```
+Email Domain Analysis:
+├── Business Domain (ics.ac, microsoft.com, etc.)
+│   ├── Check for existing company with same domain
+│   ├── If exists: Join existing company as Admin
+│   └── If new: Create company as Super Admin
+└── Personal Domain (gmail.com, yahoo.com, etc.)
+    └── User enters company name → Create personal company as Super Admin
+```
+
+### Role Assignment Logic
+
+```
+Role Assignment Flow:
+├── First user from domain → Super Admin (role_id: 1)
+│   ├── Can manage all company projects
+│   ├── Can invite/manage users
+│   └── Can access admin settings
+└── Subsequent users from domain → Admin (role_id: 2)
+    ├── Can manage own projects
+    ├── Can create/edit RFIs
+    └── Can invite users
+```
+
+### Signup Process
+
+```
+1. User enters email and password
+   ↓
+2. System analyzes email domain
+   ↓
+3a. Business Domain:
+    ├── Generate company name from domain
+    ├── Show preview to user
+    └── Assign appropriate role
+   ↓
+3b. Personal Domain:
+    ├── Require user to enter company name
+    └── Create personal company as Super Admin
+   ↓
+4. Create user account and company association
+   ↓
+5. Redirect to dashboard with appropriate permissions
+```
+
 ### Authentication Process
 
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   User Access   │ -> │  AuthGuard      │ -> │ LayoutWrapper   │
-│   Application   │    │  Component      │    │ Component       │
+│   User Signup   │ -> │  Domain         │ -> │ Company         │
+│   with Email    │    │  Analysis       │    │ Assignment      │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
          │                       │                       │
          v                       v                       v
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│ Check Auth      │    │ Route           │    │ Role-based      │
-│ Status          │    │ Protection      │    │ Layout          │
+│ Role Assignment │ -> │ User Profile    │ -> │ Dashboard       │
+│ Based on Order  │    │ Creation        │    │ Access          │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
 ```
 
@@ -165,9 +214,11 @@ const clientRoutes = ['/client/', '/rfi/']
 ```
 
 **Implementation Files**:
-- `src/contexts/AuthContext.tsx` - Authentication state management
+- `src/contexts/AuthContext.tsx` - Domain-based signup logic
+- `src/app/login/page.tsx` - Smart signup form
 - `src/components/AuthGuard.tsx` - Route protection
 - `src/hooks/useUserRole.ts` - Role management and permissions
+- `docs/COMPANY_DOMAIN_SYSTEM.md` - Detailed domain system documentation
 
 ---
 

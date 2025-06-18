@@ -194,17 +194,6 @@ export const createProjectSchema = z.object({
   
   default_urgency: z.enum(['urgent', 'non-urgent']),
   
-  // Handle standard_recipients array with email validation
-  standard_recipients: z.array(z.string())
-    .transform(arr => arr.filter(email => email && email.trim() !== ''))
-    .pipe(
-      z.array(
-        z.string()
-          .email('Invalid email address')
-      )
-      .min(1, 'At least one recipient required')
-    ),
-  
   project_disciplines: z.array(z.string()).optional(),
 });
 

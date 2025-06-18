@@ -1,15 +1,20 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { XCircle } from 'lucide-react';
 import { RFIFormalView } from '@/components/rfi/RFIFormalView';
+import { ClientLoginBanner } from '@/components/client/ClientLoginBanner';
+import { ClientAuthModal } from '@/components/client/ClientAuthModal';
+import { useAuth } from '@/contexts/AuthContext';
 import type { RFI } from '@/lib/types';
 
 interface RFIData {
   id: string;
   rfi_number: string;
   subject: string;
+  description?: string;
+  contractor_question?: string;
   reason_for_rfi: string;
   urgency: 'urgent' | 'non-urgent';
   date_created: string;
@@ -31,9 +36,11 @@ interface RFIData {
   requires_field_work?: boolean;
   field_work_description?: string;
   projects: {
+    id?: string;
     project_name: string;
     client_company_name: string;
     contractor_job_number: string;
+    project_manager_contact?: string;
   };
   attachments: Array<{
     id: string;
@@ -51,15 +58,32 @@ interface RFIData {
 
 export default function ClientRFIPage() {
   const params = useParams();
+  const router = useRouter();
   const token = params.token as string;
+  const { user } = useAuth();
   
   const [rfiData, setRfiData] = useState<RFIData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [bannerDismissed, setBannerDismissed] = useState(false);
+
+  // Check if user is already authenticated or has dismissed banner
+  const isAuthenticated = !!user;
+  const showBanner = !isAuthenticated && !bannerDismissed && rfiData;
 
   useEffect(() => {
     fetchRFIData();
   }, [token]);
+
+  // Check if user is logged in via portal access
+  useEffect(() => {
+    const portalAccess = sessionStorage.getItem('client_portal_access');
+    if (portalAccess && user) {
+      // User is authenticated and has portal access
+      // Optionally redirect to full portal or stay on RFI
+    }
+  }, [user]);
 
   const fetchRFIData = async () => {
     try {
@@ -77,6 +101,14 @@ export default function ClientRFIPage() {
       setError('Failed to load RFI data');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleLoginSuccess = () => {
+    // Redirect to client portal with the company's RFI log
+    const companyName = rfiData?.projects?.client_company_name;
+    if (companyName) {
+      router.push(`/client/rfi-log?token=${token}`);
     }
   };
 
@@ -130,7 +162,7 @@ export default function ClientRFIPage() {
     id: rfiData.id,
     rfi_number: rfiData.rfi_number,
     subject: rfiData.subject,
-    description: rfiData.reason_for_rfi,
+    description: rfiData.contractor_question || rfiData.description || 'No contractor question provided.',
     proposed_solution: rfiData.contractor_proposed_solution || '',
     priority: rfiData.urgency === 'urgent' ? 'high' : 'medium',
     created_at: ensureValidDate(rfiData.date_created),
@@ -138,7 +170,7 @@ export default function ClientRFIPage() {
     assigned_to: rfiData.to_recipient,
     status: rfiData.status === 'responded' ? 'closed' : 'active',
     stage: (rfiData.stage as any) || 'awaiting_response',
-    project_id: rfiData.projects.project_name, // Using project name as ID for display
+    project_id: rfiData.projects.id || rfiData.id, // Use actual project ID
     // Cost fields - use actual values from response
     actual_labor_cost: rfiData.actual_labor_cost || undefined,
     actual_material_cost: rfiData.actual_material_cost || undefined,
@@ -173,20 +205,45 @@ export default function ClientRFIPage() {
   };
 
   return (
-    <RFIFormalView 
-      rfi={rfiForFormalView}
-      isClientView={true}
-      clientToken={token}
-      isReadOnly={false}
-      includeAttachmentsInPDF={true}
-      clientName={rfiData.projects?.client_company_name || 'Client User'}
-      clientEmail=""
-      onResponseSubmit={() => {
-        // Delay refresh to allow user to see success toast
-        setTimeout(() => {
-          fetchRFIData();
-        }, 2000); // 2 second delay to show success message
-      }}
-    />
+    <div className="min-h-screen bg-gray-100">
+      {/* Client Login Banner - Only show if not authenticated */}
+      {showBanner && (
+        <ClientLoginBanner
+          companyName={rfiData.projects.client_company_name}
+          clientToken={token}
+          onDismiss={() => setBannerDismissed(true)}
+          onLoginClick={() => setShowAuthModal(true)}
+        />
+      )}
+
+      {/* Main RFI Content */}
+      <div className={showBanner ? "py-8" : ""}>
+        <RFIFormalView 
+          rfi={rfiForFormalView}
+          isClientView={true}
+          clientToken={token}
+          isReadOnly={false}
+          includeAttachmentsInPDF={true}
+          clientName={rfiData.projects?.client_company_name || 'Client User'}
+          clientEmail=""
+          projectData={rfiData.projects}
+          onResponseSubmit={() => {
+            // Delay refresh to allow user to see success toast
+            setTimeout(() => {
+              fetchRFIData();
+            }, 2000); // 2 second delay to show success message
+          }}
+        />
+      </div>
+
+      {/* Client Authentication Modal */}
+      <ClientAuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        clientToken={token}
+        companyName={rfiData.projects.client_company_name}
+        onLoginSuccess={handleLoginSuccess}
+      />
+    </div>
   );
 } 
