@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { useRFIs } from '@/hooks/useRFIs';
 import { RFIFormalView } from '@/components/rfi/RFIFormalView';
-import ClientLayoutWrapper from '@/components/layout/ClientLayoutWrapper';
 import type { RFI } from '@/lib/types';
 
 export default function RFIFormalPage() {
@@ -81,9 +80,6 @@ export default function RFIFormalPage() {
     );
   }
 
-  return (
-    <ClientLayoutWrapper rfiId={rfiId}>
-      <RFIFormalView rfi={rfi} isClientView={isClientView} />
-    </ClientLayoutWrapper>
-  );
+  // Clean formal view without layout wrapper for printing/clean display
+  return <RFIFormalView rfi={rfi} isClientView={isClientView} />;
 } 

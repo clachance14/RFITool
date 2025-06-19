@@ -38,42 +38,68 @@ export default function AdminPage() {
 
   // Check URL params for tab selection and load localStorage values
   useEffect(() => {
-    // Only run on client side
-    if (typeof window !== 'undefined') {
-      const urlParams = new URLSearchParams(window.location.search);
-      const tab = urlParams.get('tab');
-      if (tab && ['branding', 'users', 'export', 'projects', 'system', 'notifications'].includes(tab)) {
-        setActiveTab(tab);
+    const loadCompanyData = async () => {
+      // Only run on client side
+      if (typeof window !== 'undefined' && session?.user?.id) {
+        const urlParams = new URLSearchParams(window.location.search);
+        const tab = urlParams.get('tab');
+        if (tab && ['branding', 'users', 'export', 'projects', 'system', 'notifications'].includes(tab)) {
+          setActiveTab(tab);
+        }
+
+        // Load contractor logo from database first, fallback to localStorage
+        let contractorLogo = null;
+        try {
+          const { data: userCompany } = await supabase
+            .from('company_users')
+            .select('company_id')
+            .eq('user_id', session.user.id)
+            .single();
+            
+          if (userCompany) {
+            const { data: company } = await supabase
+              .from('companies')
+              .select('logo_url')
+              .eq('id', userCompany.company_id)
+              .single();
+              
+            contractorLogo = company?.logo_url || localStorage.getItem('contractor_logo') || null;
+          }
+        } catch (error) {
+          // Fallback to localStorage if database query fails
+          contractorLogo = localStorage.getItem('contractor_logo') || null;
+        }
+
+        // Load other saved values from localStorage
+        const clientLogo = localStorage.getItem('client_logo') || null;
+        const companyName = localStorage.getItem('company_name') || '';
+        const clientName = localStorage.getItem('client_name') || '';
+        
+        setSavedContractorLogo(contractorLogo);
+        setSavedClientLogo(clientLogo);
+        setSavedCompanyName(companyName);
+        setSavedClientName(clientName);
+        
+        setContractorLogo(contractorLogo);
+        setClientLogo(clientLogo);
+        setCompanyName(companyName);
+        setClientName(clientName);
+
+        // Load system settings
+        const rfiFormat = localStorage.getItem('rfi_number_format') || 'RFI-{YYYY}-{####}';
+        const dueDays = parseInt(localStorage.getItem('default_due_days') || '7');
+        const emailNotifs = localStorage.getItem('email_notifications') === 'true';
+        const autoAssign = localStorage.getItem('auto_assign_pm') === 'true';
+        
+        setRfiNumberFormat(rfiFormat);
+        setDefaultDueDays(dueDays);
+        setEmailNotifications(emailNotifs);
+        setAutoAssignPM(autoAssign);
       }
+    };
 
-      // Load saved values from localStorage
-      const contractorLogo = localStorage.getItem('contractor_logo') || null;
-      const clientLogo = localStorage.getItem('client_logo') || null;
-      const companyName = localStorage.getItem('company_name') || '';
-      const clientName = localStorage.getItem('client_name') || '';
-      
-      setSavedContractorLogo(contractorLogo);
-      setSavedClientLogo(clientLogo);
-      setSavedCompanyName(companyName);
-      setSavedClientName(clientName);
-      
-      setContractorLogo(contractorLogo);
-      setClientLogo(clientLogo);
-      setCompanyName(companyName);
-      setClientName(clientName);
-
-      // Load system settings
-      const rfiFormat = localStorage.getItem('rfi_number_format') || 'RFI-{YYYY}-{####}';
-      const dueDays = parseInt(localStorage.getItem('default_due_days') || '7');
-      const emailNotifs = localStorage.getItem('email_notifications') === 'true';
-      const autoAssign = localStorage.getItem('auto_assign_pm') === 'true';
-      
-      setRfiNumberFormat(rfiFormat);
-      setDefaultDueDays(dueDays);
-      setEmailNotifications(emailNotifs);
-      setAutoAssignPM(autoAssign);
-    }
-  }, []);
+    loadCompanyData();
+  }, [session?.user?.id]);
   
   // Current saved values
   const [savedContractorLogo, setSavedContractorLogo] = useState<string | null>(null);
@@ -267,18 +293,56 @@ export default function AdminPage() {
       return;
     }
 
-    // Convert to base64 and update working state only (don't save yet)
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const base64 = e.target?.result as string;
-      
+    try {
+      // For contractor logos, upload to Supabase Storage and save to database
       if (type === 'contractor') {
-        setContractorLogo(base64);
+        // Upload to Supabase Storage
+        const { uploadLogo } = await import('@/lib/storage');
+        const { url, error } = await uploadLogo(file, 'COMPANY_LOGOS');
+        
+        if (error) {
+          alert('Failed to upload contractor logo: ' + error);
+          return;
+        }
+        
+        if (url) {
+          // Save to database via API endpoint (bypasses RLS)
+          try {
+            const response = await fetch('/api/admin/update-company-logo', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${session?.access_token}`,
+              },
+              body: JSON.stringify({ logoUrl: url }),
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+              alert('Failed to save contractor logo: ' + result.error);
+              return;
+            }
+
+            setContractorLogo(url);
+            alert('Contractor logo uploaded and saved successfully!');
+          } catch (error) {
+            alert('Failed to save contractor logo: ' + error);
+            return;
+          }
+        }
       } else {
-        setClientLogo(base64);
+        // For client logos, keep the existing base64 behavior
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const base64 = e.target?.result as string;
+          setClientLogo(base64);
+        };
+        reader.readAsDataURL(file);
       }
-    };
-    reader.readAsDataURL(file);
+    } catch (error) {
+      alert('Failed to upload logo: ' + error);
+    }
   };
 
   const handleRemoveLogo = (type: 'contractor' | 'client') => {
@@ -290,9 +354,16 @@ export default function AdminPage() {
   };
 
   const handleSaveAll = () => {
-    // Save all changes to localStorage
+    // For contractor logo, if it's already saved to database (URL format), don't save to localStorage
+    // Only save to localStorage if it's base64 (old format)
     if (contractorLogo) {
-      localStorage.setItem('contractor_logo', contractorLogo);
+      if (contractorLogo.startsWith('http')) {
+        // It's a URL from database, don't save to localStorage
+        localStorage.removeItem('contractor_logo');
+      } else {
+        // It's base64, save to localStorage for backward compatibility
+        localStorage.setItem('contractor_logo', contractorLogo);
+      }
     } else {
       localStorage.removeItem('contractor_logo');
     }

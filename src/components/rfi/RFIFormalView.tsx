@@ -161,9 +161,48 @@ export function RFIFormalView({ rfi: initialRfi, includeAttachmentsInPDF = false
           {/* Main Container - Document Style */}
           <div className="bg-white border border-gray-300 print:border-none">
             
-            {/* Header Section */}
-            <div className="px-8 py-6 space-y-4">
-              {/* Main Title - Centered */}
+            {/* Header Section with Logos */}
+            <div className="px-8 py-6 space-y-4 relative">
+              {/* Logo Container - Ensures perfect alignment */}
+              <div className="absolute top-6 left-0 right-0 flex justify-between items-start px-8">
+                {/* Contractor Logo - Left */}
+                <div className="w-20 h-20 flex-shrink-0">
+                  {project?.companies?.logo_url || project?.company?.logo_url ? (
+                    <img 
+                      src={project.companies?.logo_url || project.company?.logo_url} 
+                      alt="Contractor Logo"
+                      className="w-full h-full object-contain border border-gray-300 rounded"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                        e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                      }}
+                    />
+                  ) : null}
+                  <div className={`w-full h-full bg-gray-100 border border-gray-300 rounded flex items-center justify-center ${project?.companies?.logo_url || project?.company?.logo_url ? 'hidden' : ''}`}>
+                    <span className="text-xs text-gray-500 text-center">Contractor<br/>Logo</span>
+                  </div>
+                </div>
+                
+                {/* Client Logo - Right */}
+                <div className="w-20 h-20 flex-shrink-0">
+                  {project?.client_logo_url ? (
+                    <img 
+                      src={project.client_logo_url} 
+                      alt="Client Logo"
+                      className="w-full h-full object-contain border border-gray-300 rounded"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                        e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                      }}
+                    />
+                  ) : null}
+                  <div className={`w-full h-full bg-gray-100 border border-gray-300 rounded flex items-center justify-center ${project?.client_logo_url ? 'hidden' : ''}`}>
+                    <span className="text-xs text-gray-500 text-center">Client<br/>Logo</span>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Main Title - Centered (original position) */}
               <div className="text-center">
                 <h1 className="text-2xl font-bold text-gray-900">REQUEST FOR INFORMATION</h1>
               </div>
@@ -173,11 +212,11 @@ export function RFIFormalView({ rfi: initialRfi, includeAttachmentsInPDF = false
                 <h2 className="text-lg text-gray-900 font-medium">{project?.project_name || 'Unknown Project'}</h2>
               </div>
               
-              {/* Contract and RFI Number Row */}
+              {/* Date and RFI Number Row */}
               <div className="flex justify-between items-center">
                 <div className="text-left">
-                  <span className="text-sm text-gray-600">Contract#: </span>
-                  <span className="text-sm text-gray-900 font-medium">{project?.contractor_job_number || 'N/A'}</span>
+                  <span className="text-sm text-gray-600">Date: </span>
+                  <span className="text-sm text-gray-900 font-medium">{format(new Date(rfi.created_at), 'MM/dd/yyyy')}</span>
                 </div>
                 <div className="text-right">
                   <span className="text-sm text-gray-600">RFI#: </span>
@@ -195,8 +234,8 @@ export function RFIFormalView({ rfi: initialRfi, includeAttachmentsInPDF = false
                     <span className="text-gray-900 text-sm font-medium">{project?.contractor_job_number || 'N/A'}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-600 text-sm">Date:</span>
-                    <span className="text-gray-900 text-sm font-medium">{format(new Date(rfi.created_at), 'MM/dd/yyyy')}</span>
+                    <span className="text-gray-600 text-sm">Reason for RFI:</span>
+                    <span className="text-gray-900 text-sm font-medium">{rfi.reason_for_rfi || 'Not specified'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-600 text-sm">Company:</span>
@@ -207,15 +246,15 @@ export function RFIFormalView({ rfi: initialRfi, includeAttachmentsInPDF = false
                 <div className="space-y-3">
                   <div className="flex justify-between">
                     <span className="text-gray-600 text-sm">Contract#:</span>
-                    <span className="text-gray-900 text-sm font-medium">{project?.contractor_job_number || 'N/A'}</span>
+                    <span className="text-gray-900 text-sm font-medium">{project?.job_contract_number || 'N/A'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-600 text-sm">To:</span>
                     <span className="text-gray-900 text-sm font-medium">{project?.project_manager_contact || 'Project Manager'}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-600 text-sm">Priority:</span>
-                    <span className="text-gray-900 text-sm font-medium capitalize">{rfi.priority === 'high' ? 'urgent' : rfi.priority === 'low' ? 'non-urgent' : rfi.priority}</span>
+                    <span className="text-gray-600 text-sm">Discipline:</span>
+                    <span className="text-gray-900 text-sm font-medium">{rfi.discipline || 'Not specified'}</span>
                   </div>
                 </div>
               </div>
@@ -228,6 +267,49 @@ export function RFIFormalView({ rfi: initialRfi, includeAttachmentsInPDF = false
                 <span className="text-gray-900 text-sm font-medium flex-1">{rfi.subject}</span>
               </div>
             </div>
+
+            {/* Impact Analysis Section - Show work, cost, and schedule impact from initial RFI */}
+            {(rfi.work_impact || rfi.cost_impact || rfi.schedule_impact) && (
+              <div className="border-t border-gray-300 px-8 py-6">
+                <h3 className="text-base font-semibold text-gray-900 mb-4">Impact Analysis</h3>
+                
+                <div className="space-y-4">
+                  {/* Work Impact */}
+                  {rfi.work_impact && (
+                    <div>
+                      <h4 className="font-medium text-gray-700 mb-2">Work Impact:</h4>
+                      <div className="border border-gray-200 p-3 bg-gray-50 rounded">
+                        <p className="text-gray-900 text-sm whitespace-pre-wrap">{rfi.work_impact}</p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Cost Impact */}
+                  {rfi.cost_impact && (
+                    <div>
+                      <h4 className="font-medium text-gray-700 mb-2">Cost Impact:</h4>
+                      <div className="border border-gray-200 p-3 bg-gray-50 rounded">
+                        <p className="text-gray-900 text-sm whitespace-pre-wrap">
+                          {typeof rfi.cost_impact === 'number' 
+                            ? `$${rfi.cost_impact.toLocaleString()}` 
+                            : rfi.cost_impact}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Schedule Impact */}
+                  {rfi.schedule_impact && (
+                    <div>
+                      <h4 className="font-medium text-gray-700 mb-2">Schedule Impact:</h4>
+                      <div className="border border-gray-200 p-3 bg-gray-50 rounded">
+                        <p className="text-gray-900 text-sm whitespace-pre-wrap">{rfi.schedule_impact}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Cost Impact Section - Only show if there are costs */}
             {(((rfi.cost_items && rfi.cost_items.length > 0) || 
@@ -388,24 +470,36 @@ export function RFIFormalView({ rfi: initialRfi, includeAttachmentsInPDF = false
                               {attachment.file_size ? formatFileSize(attachment.file_size) : 'Unknown'}
                             </td>
                             <td className="px-4 py-2 text-sm print:hidden">
-                              {attachment.file_type?.includes('image') ? (
-                                <button
-                                  onClick={() => openPreview(attachment)}
-                                  className="text-blue-600 hover:text-blue-800 mr-2"
-                                >
-                                  Preview
-                                </button>
-                              ) : null}
-                              {attachment.public_url && (
-                                <a
-                                  href={attachment.public_url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-blue-600 hover:text-blue-800"
-                                >
-                                  Download
-                                </a>
-                              )}
+                              <div className="flex space-x-2">
+                                {attachment.public_url && (
+                                  <>
+                                    <a
+                                      href={attachment.public_url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-green-600 hover:text-green-800"
+                                    >
+                                      View
+                                    </a>
+                                    <a
+                                      href={attachment.public_url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-blue-600 hover:text-blue-800"
+                                    >
+                                      Download
+                                    </a>
+                                  </>
+                                )}
+                                {attachment.file_type?.includes('image') && (
+                                  <button
+                                    onClick={() => openPreview(attachment)}
+                                    className="text-purple-600 hover:text-purple-800"
+                                  >
+                                    Preview
+                                  </button>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -416,120 +510,7 @@ export function RFIFormalView({ rfi: initialRfi, includeAttachmentsInPDF = false
               )}
             </div>
 
-            {/* Attachments for PDF - Only when printing */}
-            {includeAttachmentsInPDF && rfi.attachment_files && rfi.attachment_files.length > 0 && (
-              <div className="border-t border-gray-300 px-8 py-6">
-                <h2 className="text-lg font-bold text-gray-900 mb-4">Attachments</h2>
-                
-                <div className="space-y-6">
-                  {rfi.attachment_files.map((attachment, index) => (
-                    <div key={attachment.id || index} className="border border-gray-200 p-4">
-                      <div className="flex items-center space-x-2 mb-3">
-                        {attachment.file_type?.includes('pdf') ? (
-                          <svg className="w-5 h-5 text-red-600" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
-                          </svg>
-                        ) : attachment.file_type?.includes('image') ? (
-                          <svg className="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
-                          </svg>
-                        ) : (
-                          <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
-                          </svg>
-                        )}
-                        <h3 className="font-semibold text-gray-900">{attachment.file_name}</h3>
-                        <span className="text-sm text-gray-500">
-                          ({attachment.file_size ? formatFileSize(attachment.file_size) : 'Unknown size'})
-                        </span>
-                      </div>
 
-                      {attachment.file_type?.includes('image') && attachment.public_url ? (
-                        <div className="mt-3">
-                          <img
-                            src={attachment.public_url}
-                            alt={attachment.file_name}
-                            className="max-w-full h-auto border border-gray-300"
-                            style={{ maxHeight: '500px' }}
-                            onError={(e) => {
-                              e.currentTarget.style.display = 'none';
-                            }}
-                          />
-                        </div>
-                      ) : attachment.file_type?.includes('pdf') && attachment.public_url ? (
-                        <div className="mt-3 p-3 bg-gray-50 border border-gray-200">
-                          <p className="text-sm text-gray-700">
-                            📄 PDF document attached.
-                          </p>
-                          <div className="flex items-center space-x-4 mt-2">
-                            <a
-                              href={attachment.public_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center space-x-1 text-blue-600 hover:text-blue-800 text-sm"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                              </svg>
-                              <span>Download PDF</span>
-                            </a>
-                            <a
-                              href={attachment.public_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center space-x-1 text-green-600 hover:text-green-800 text-sm"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                              </svg>
-                              <span>View PDF</span>
-                            </a>
-                          </div>
-                        </div>
-                      ) : attachment.public_url ? (
-                        <div className="mt-3 p-3 bg-gray-50 border border-gray-200">
-                          <p className="text-sm text-gray-700">
-                            📎 File attached.
-                          </p>
-                          <div className="flex items-center space-x-4 mt-2">
-                            <a
-                              href={attachment.public_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center space-x-1 text-blue-600 hover:text-blue-800 text-sm"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                              </svg>
-                              <span>Download</span>
-                            </a>
-                            {attachment.file_type?.includes('image') && (
-                              <button
-                                onClick={() => openPreview(attachment)}
-                                className="inline-flex items-center space-x-1 text-green-600 hover:text-green-800 text-sm"
-                              >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                </svg>
-                                <span>Preview</span>
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="mt-3 p-3 bg-gray-50 border border-gray-200">
-                          <p className="text-sm text-gray-700">
-                            📎 File attached. No download link available.
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
 
             {/* Client's Response Section - Only show if not read-only or if response exists */}
             {(!isReadOnly || rfi.response) && (

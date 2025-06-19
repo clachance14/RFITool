@@ -40,7 +40,12 @@ async function validateToken(token: string): Promise<{
           project_name,
           client_company_name,
           contractor_job_number,
-          project_manager_contact
+          job_contract_number,
+          project_manager_contact,
+          client_logo_url,
+          companies!inner(
+            logo_url
+          )
         )
       `)
       .eq('secure_link_token', token)
@@ -104,9 +109,15 @@ export async function GET(
       );
     }
 
-    // Fetch complete RFI data with attachments
+    // Fetch complete RFI data with attachments and cost items
     const { data: attachments } = await supabaseAdmin
       .from('rfi_attachments')
+      .select('*')
+      .eq('rfi_id', validation.rfi.id);
+
+    // Fetch cost items for the Cost Impact Breakdown
+    const { data: costItems } = await supabaseAdmin
+      .from('rfi_cost_items')
       .select('*')
       .eq('rfi_id', validation.rfi.id);
 
@@ -128,7 +139,8 @@ export async function GET(
       success: true,
       data: {
         ...validation.rfi,
-        attachments: attachmentsWithUrls
+        attachments: attachmentsWithUrls,
+        cost_items: costItems || []
       }
     });
   } catch (error) {

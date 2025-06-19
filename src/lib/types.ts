@@ -155,6 +155,7 @@ export interface RFI {
   subject: string;
   description: string;
   proposed_solution?: string;
+  reason_for_rfi?: string;
   
   // NEW: Status/Stage System
   status: RFIStatus;
@@ -203,6 +204,12 @@ export interface RFI {
   actual_material_cost?: number;
   actual_equipment_cost?: number;
   actual_total_cost?: number;
+  
+  // Impact Analysis (from initial RFI)
+  work_impact?: string;
+  cost_impact?: string | number;
+  schedule_impact?: string;
+  discipline?: string;
   
   // Secure Links
   secure_link_token?: string;

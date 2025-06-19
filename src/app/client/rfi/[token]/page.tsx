@@ -40,7 +40,12 @@ interface RFIData {
     project_name: string;
     client_company_name: string;
     contractor_job_number: string;
+    job_contract_number: string;
     project_manager_contact?: string;
+    client_logo_url?: string;
+    companies?: {
+      logo_url?: string;
+    };
   };
   attachments: Array<{
     id: string;
@@ -49,11 +54,22 @@ interface RFIData {
     file_type: string;
     public_url: string;
   }>;
+  cost_items?: Array<{
+    id: string;
+    rfi_id: string;
+    description: string;
+    cost_type: string;
+    quantity: number;
+    unit: string;
+    unit_cost: number;
+    created_at: string;
+  }>;
   client_response?: string;
   response?: string;
   response_status?: string;
   date_responded?: string;
   field_work_approved?: boolean;
+  discipline?: string;
 }
 
 export default function ClientRFIPage() {
@@ -164,6 +180,8 @@ export default function ClientRFIPage() {
     subject: rfiData.subject,
     description: rfiData.contractor_question || rfiData.description || 'No contractor question provided.',
     proposed_solution: rfiData.contractor_proposed_solution || '',
+    reason_for_rfi: rfiData.reason_for_rfi || undefined,
+    discipline: rfiData.discipline || undefined,
     priority: rfiData.urgency === 'urgent' ? 'high' : 'medium',
     created_at: ensureValidDate(rfiData.date_created),
     updated_at: ensureValidDate(rfiData.date_created),
@@ -176,6 +194,10 @@ export default function ClientRFIPage() {
     actual_material_cost: rfiData.actual_material_cost || undefined,
     actual_equipment_cost: rfiData.actual_equipment_cost || undefined,
     actual_labor_hours: rfiData.actual_labor_hours || undefined,
+    // Impact analysis fields from initial RFI
+    work_impact: rfiData.work_impact || undefined,
+    cost_impact: rfiData.cost_impact || undefined,
+    schedule_impact: rfiData.schedule_impact || undefined,
     // Legacy cost fields for compatibility
     labor_costs: rfiData.actual_labor_cost || undefined,
     material_costs: rfiData.actual_material_cost || undefined,
@@ -201,7 +223,10 @@ export default function ClientRFIPage() {
     // Required fields
     created_by: '',
     due_date: null,
-    cost_items: []
+    cost_items: rfiData.cost_items?.map(item => ({
+      ...item,
+      cost_type: item.cost_type as 'labor' | 'material' | 'equipment' | 'subcontractor' | 'other'
+    })) || []
   };
 
   return (
