@@ -9,6 +9,8 @@ import { RFIWorkflowControls } from '@/components/rfi/RFIWorkflowControls';
 import { RFIStatusDisplay, RFIProgress } from '@/components/rfi/RFIStatusBadge';
 import { PermissionButton } from '@/components/PermissionButton';
 import { TimesheetTracker } from '@/components/rfi/TimesheetTracker';
+import { supabase } from '@/lib/supabase';
+import { useToast } from '@/components/ui/use-toast';
 
 interface RFIWorkflowViewProps {
   rfi: RFI;
@@ -55,6 +57,7 @@ export function RFIWorkflowView({ rfi: initialRfi }: RFIWorkflowViewProps) {
   const { projects } = useProjects();
   const { updateRFI } = useRFIs();
   const [rfi, setRfi] = useState<RFI>(initialRfi);
+  const { toast } = useToast();
   const [previewAttachment, setPreviewAttachment] = useState<RFIAttachment | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -112,6 +115,10 @@ export function RFIWorkflowView({ rfi: initialRfi }: RFIWorkflowViewProps) {
   const handleGenerateSecureLink = async () => {
     try {
       setGeneratingLink(true);
+      
+      // Get current user information
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      
       const response = await fetch(`/api/rfis/${rfi.id}/generate-link`, {
         method: 'POST',
         headers: {
@@ -119,7 +126,10 @@ export function RFIWorkflowView({ rfi: initialRfi }: RFIWorkflowViewProps) {
         },
         body: JSON.stringify({
           expirationDays: 30,
-          allowMultipleResponses: false
+          allowMultipleResponses: false,
+          // Include user information in the request
+          user_id: user?.id,
+          user_email: user?.email
         })
       });
 
@@ -142,9 +152,16 @@ export function RFIWorkflowView({ rfi: initialRfi }: RFIWorkflowViewProps) {
   const copyLinkToClipboard = () => {
     if (secureLinkData?.secure_link) {
       navigator.clipboard.writeText(secureLinkData.secure_link).then(() => {
-        alert('Link copied to clipboard!');
+        toast({
+          title: 'Success',
+          description: 'Link copied to clipboard!',
+        });
       }).catch(() => {
-        alert('Failed to copy link');
+        toast({
+          title: 'Error',
+          description: 'Failed to copy link',
+          variant: 'destructive',
+        });
       });
     }
   };
@@ -178,9 +195,16 @@ Thanks,
   const copyMessageToClipboard = () => {
     const message = generateDefaultMessage();
     navigator.clipboard.writeText(message).then(() => {
-      alert('Message copied to clipboard!');
+      toast({
+        title: 'Success',
+        description: 'Message copied to clipboard!',
+      });
     }).catch(() => {
-      alert('Failed to copy message');
+      toast({
+        title: 'Error',
+        description: 'Failed to copy message',
+        variant: 'destructive',
+      });
     });
   };
 

@@ -1,6 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase, getSupabaseAdmin } from '@/lib/supabase';
+import { createClient } from '@supabase/supabase-js';
 import { RFITimesheetEntry } from '@/lib/types';
+
+// Initialize Supabase admin client
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  }
+);
 
 // GET /api/rfis/[id]/timesheet-entries - Get all timesheet entries for an RFI
 export async function GET(
@@ -17,8 +29,61 @@ export async function GET(
       );
     }
 
-    // Use regular client (RLS disabled for testing)
-    const { data: entries, error } = await supabase
+    // Get authenticated user
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    const token = authHeader.split(' ')[1];
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+
+    if (authError || !user) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    // Verify user has access to this RFI through company association
+    const { data: userCompany, error: companyError } = await supabaseAdmin
+      .from('company_users')
+      .select('company_id')
+      .eq('user_id', user.id)
+      .single();
+
+    if (companyError || !userCompany) {
+      return NextResponse.json(
+        { error: 'Unable to determine user company' },
+        { status: 403 }
+      );
+    }
+
+    // Verify RFI belongs to user's company
+    const { data: rfiProject, error: rfiError } = await supabaseAdmin
+      .from('rfis')
+      .select(`
+        id,
+        projects!inner(
+          company_id
+        )
+      `)
+      .eq('id', rfiId)
+      .eq('projects.company_id', userCompany.company_id)
+      .single();
+
+    if (rfiError || !rfiProject) {
+      return NextResponse.json(
+        { error: 'RFI not found or access denied' },
+        { status: 404 }
+      );
+    }
+
+    // Get timesheet entries using admin client but with proper authorization
+    const { data: entries, error } = await supabaseAdmin
       .from('rfi_timesheet_entries')
       .select('*')
       .eq('rfi_id', rfiId)
@@ -46,7 +111,7 @@ export async function GET(
     }
 
     // Also get the summary data
-    const { data: summary, error: summaryError } = await supabase
+    const { data: summary, error: summaryError } = await supabaseAdmin
       .from('rfi_timesheet_summary')
       .select('*')
       .eq('rfi_id', rfiId)
@@ -89,6 +154,59 @@ export async function POST(
       );
     }
 
+    // Get authenticated user
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    const token = authHeader.split(' ')[1];
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+
+    if (authError || !user) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    // Verify user has access to this RFI through company association
+    const { data: userCompany, error: companyError } = await supabaseAdmin
+      .from('company_users')
+      .select('company_id')
+      .eq('user_id', user.id)
+      .single();
+
+    if (companyError || !userCompany) {
+      return NextResponse.json(
+        { error: 'Unable to determine user company' },
+        { status: 403 }
+      );
+    }
+
+    // Verify RFI belongs to user's company
+    const { data: rfiProject, error: rfiError } = await supabaseAdmin
+      .from('rfis')
+      .select(`
+        id,
+        projects!inner(
+          company_id
+        )
+      `)
+      .eq('id', rfiId)
+      .eq('projects.company_id', userCompany.company_id)
+      .single();
+
+    if (rfiError || !rfiProject) {
+      return NextResponse.json(
+        { error: 'RFI not found or access denied' },
+        { status: 404 }
+      );
+    }
+
     // Validate required fields
     const { 
       timesheet_number, 
@@ -108,25 +226,8 @@ export async function POST(
       );
     }
 
-    // Get the first user from the database for created_by field
-    // TODO: Implement proper authentication later
-    const supabaseAdmin = getSupabaseAdmin();
-    const { data: users, error: usersError } = await supabaseAdmin
-      .from('users')
-      .select('id')
-      .limit(1);
-    
-    if (usersError || !users || users.length === 0) {
-      return NextResponse.json(
-        { error: 'Unable to determine user for timesheet entry' },
-        { status: 500 }
-      );
-    }
-    
-    const userId = users[0].id;
-
-    // Check if timesheet number already exists for this RFI
-    const { data: existing, error: checkError } = await supabase
+    // Check if timesheet number already exists for this RFI using admin client
+    const { data: existing, error: checkError } = await supabaseAdmin
       .from('rfi_timesheet_entries')
       .select('id')
       .eq('rfi_id', rfiId)
@@ -134,6 +235,7 @@ export async function POST(
       .single();
 
     if (checkError && checkError.code !== 'PGRST116') {
+      console.error('Error checking existing timesheet:', checkError);
       return NextResponse.json(
         { error: 'Failed to validate timesheet number' },
         { status: 500 }
@@ -147,8 +249,8 @@ export async function POST(
       );
     }
 
-        // Create the timesheet entry
-    const { data: newEntry, error: insertError } = await supabase
+    // Create the timesheet entry using authenticated user ID
+    const { data: newEntry, error: insertError } = await supabaseAdmin
       .from('rfi_timesheet_entries')
       .insert({
         rfi_id: rfiId,
@@ -160,12 +262,13 @@ export async function POST(
         equipment_cost: Number(equipment_cost) || 0,
         description: description || null,
         entry_date: entry_date || new Date().toISOString().split('T')[0],
-        created_by: userId
+        created_by: user.id // Use the authenticated user's ID
       })
       .select()
       .single();
 
     if (insertError) {
+      console.error('Error creating timesheet entry:', insertError);
       return NextResponse.json(
         { error: 'Failed to create timesheet entry' },
         { status: 500 }

@@ -11,6 +11,7 @@ import { EmailTemplateService } from '@/services/emailTemplateService';
 import { EmailTemplateModal } from '@/components/rfi/EmailTemplateModal';
 import { RFIStatusDisplay, RFIProgress } from '@/components/rfi/RFIStatusBadge';
 import { TimesheetTracker } from '@/components/rfi/TimesheetTracker';
+import { useToast } from '@/components/ui/use-toast';
 
 interface RfiDetailViewProps {
   rfi: RFI;
@@ -127,6 +128,7 @@ export function RfiDetailView({ rfi: initialRfi, hidePrintElements = false, incl
   const { projects } = useProjects();
   const { submitResponse } = useRFIs();
   const [rfi, setRfi] = useState<RFI>(initialRfi);
+  const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [responseText, setResponseText] = useState(rfi.response || '');
   const [submittedBy, setSubmittedBy] = useState('');
@@ -189,6 +191,11 @@ export function RfiDetailView({ rfi: initialRfi, hidePrintElements = false, incl
   const handleGenerateSecureLink = async () => {
     try {
       setGeneratingLink(true);
+      
+      // Get current user information using the supabase import
+      const { supabase } = await import('@/lib/supabase');
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      
       const response = await fetch(`/api/rfis/${rfi.id}/generate-link`, {
         method: 'POST',
         headers: {
@@ -196,7 +203,10 @@ export function RfiDetailView({ rfi: initialRfi, hidePrintElements = false, incl
         },
         body: JSON.stringify({
           expirationDays: 30,
-          allowMultipleResponses: false
+          allowMultipleResponses: false,
+          // Include user information in the request
+          user_id: user?.id,
+          user_email: user?.email
         })
       });
 
@@ -219,9 +229,16 @@ export function RfiDetailView({ rfi: initialRfi, hidePrintElements = false, incl
   const copyLinkToClipboard = () => {
     if (secureLinkData?.secure_link) {
       navigator.clipboard.writeText(secureLinkData.secure_link).then(() => {
-        alert('Link copied to clipboard!');
+        toast({
+          title: 'Success',
+          description: 'Link copied to clipboard!',
+        });
       }).catch(() => {
-        alert('Failed to copy link');
+        toast({
+          title: 'Error',
+          description: 'Failed to copy link',
+          variant: 'destructive',
+        });
       });
     }
   };
@@ -255,9 +272,16 @@ Thanks,
   const copyMessageToClipboard = () => {
     const message = generateDefaultMessage();
     navigator.clipboard.writeText(message).then(() => {
-      alert('Message copied to clipboard!');
+      toast({
+        title: 'Success',
+        description: 'Message copied to clipboard!',
+      });
     }).catch(() => {
-      alert('Failed to copy message');
+      toast({
+        title: 'Error',
+        description: 'Failed to copy message',
+        variant: 'destructive',
+      });
     });
   };
 
@@ -1209,9 +1233,16 @@ Thanks,
                       onClick={() => {
                         const template = getEmailTemplate(rfi, secureLinkData, project);
                         navigator.clipboard.writeText(template).then(() => {
-                          alert('Email template copied to clipboard!');
+                          toast({
+                            title: 'Success',
+                            description: 'Email template copied to clipboard!',
+                          });
                         }).catch(() => {
-                          alert('Failed to copy email template');
+                          toast({
+                            title: 'Error',
+                            description: 'Failed to copy email template',
+                            variant: 'destructive',
+                          });
                         });
                       }}
                       className="flex items-center space-x-1 px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"

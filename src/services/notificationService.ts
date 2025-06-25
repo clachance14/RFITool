@@ -1,11 +1,42 @@
 import { supabase } from '@/lib/supabase';
+import { createClient } from '@supabase/supabase-js';
 import { EmailTemplateService, EmailTemplateOptions } from './emailTemplateService';
+
+// Helper function to get admin client (only available server-side)
+function getAdminClient() {
+  if (typeof window !== 'undefined') {
+    // Client-side: return regular client
+    return supabase;
+  }
+  
+  // Server-side: return admin client
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    console.warn('SUPABASE_SERVICE_ROLE_KEY not available, using regular client');
+    return supabase;
+  }
+  
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    }
+  );
+}
 
 export interface NotificationData {
   rfi_id: string;
   type: 'response_received' | 'overdue_reminder' | 'status_changed' | 'link_generated';
   message: string;
   metadata?: Record<string, any>;
+  performed_by?: string;
+  performed_by_name?: string;
+  performed_by_email?: string;
+  performed_by_type?: 'user' | 'client' | 'system';
+  action_details?: string;
 }
 
 export interface EmailNotificationData {
@@ -19,22 +50,38 @@ export interface EmailNotificationData {
 
 export class NotificationService {
   /**
-   * Create an in-app notification
+   * Create an in-app notification with enhanced user information
    */
   static async createNotification(data: NotificationData): Promise<void> {
     try {
-      await supabase
+      // Use admin client on server-side to bypass RLS for system notifications
+      const client = getAdminClient();
+      const { data: insertedNotification, error } = await client
         .from('notifications')
         .insert({
           rfi_id: data.rfi_id,
           type: data.type,
           message: data.message,
-          metadata: data.metadata || {},
+          metadata: {
+            ...data.metadata || {},
+            performed_by: data.performed_by,
+            performed_by_name: data.performed_by_name,
+            performed_by_email: data.performed_by_email,
+            performed_by_type: data.performed_by_type || 'user',
+            action_details: data.action_details,
+            timestamp: new Date().toISOString()
+          },
           is_read: false,
           created_at: new Date().toISOString()
-        });
+        })
+        .select();
       
-      console.log(`✅ Notification created for RFI ${data.rfi_id}: ${data.type}`);
+      if (error) {
+        console.error('Failed to create notification:', error);
+        return;
+      }
+      
+      console.log(`✅ Notification created for RFI ${data.rfi_id}: ${data.type} by ${data.performed_by_name || data.performed_by || 'unknown'}`, insertedNotification);
     } catch (error) {
       console.error('Failed to create notification:', error);
       // Don't throw - notification failure shouldn't break main functionality
@@ -42,29 +89,84 @@ export class NotificationService {
   }
 
   /**
-   * Send notification when client responds to RFI
+   * Create notification for status changes with user information
+   */
+  static async notifyStatusChange(
+    rfiId: string,
+    fromStatus: string,
+    toStatus: string,
+    changedBy: string,
+    reason?: string
+  ): Promise<void> {
+    try {
+      // Get user information using admin client to bypass RLS
+      const client = getAdminClient();
+      const { data: userData, error: userError } = await client
+        .from('users')
+        .select('full_name, email')
+        .eq('id', changedBy)
+        .single();
+
+      if (userError) {
+        console.warn('Failed to fetch user data for notification:', userError);
+      }
+
+      const userName = userData?.full_name || userData?.email || 'Unknown User';
+      const userEmail = userData?.email;
+
+      await this.createNotification({
+        rfi_id: rfiId,
+        type: 'status_changed',
+        message: `${userName} changed RFI status from ${fromStatus} to ${toStatus}${reason ? ` - ${reason}` : ''}`,
+        performed_by: changedBy,
+        performed_by_name: userName,
+        performed_by_email: userEmail,
+        performed_by_type: 'user',
+        action_details: `Status transition: ${fromStatus} → ${toStatus}`,
+        metadata: {
+          from_status: fromStatus,
+          to_status: toStatus,
+          reason: reason
+        }
+      });
+    } catch (error) {
+      console.error('Failed to send status change notification:', error);
+    }
+  }
+
+  /**
+   * Send notification when client responds to RFI - enhanced with detailed user info
    */
   static async notifyClientResponse(
     rfiId: string, 
     responseStatus: string,
     clientName: string,
+    responderName: string,
+    clientEmail?: string,
     projectTeamEmails: string[] = []
   ): Promise<void> {
     try {
-      // Create in-app notification
+      // Create in-app notification with enhanced client information
       await this.createNotification({
         rfi_id: rfiId,
         type: 'response_received',
-        message: `Client response received with status: ${responseStatus}`,
+        message: `${responderName} from ${clientName} submitted a response with status: ${responseStatus}`,
+        performed_by_name: responderName,
+        performed_by_email: clientEmail,
+        performed_by_type: 'client',
+        action_details: `Client response submitted with status: ${responseStatus}`,
         metadata: {
           response_status: responseStatus,
+          responder_name: responderName,
           client_name: clientName,
+          client_email: clientEmail,
           timestamp: new Date().toISOString()
         }
       });
 
-      // Get RFI and project data for email
-      const { data: rfiData, error: rfiError } = await supabase
+      // Get RFI and project data for email using admin client
+      const client = getAdminClient();
+      const { data: rfiData, error: rfiError } = await client
         .from('rfis')
         .select(`
           *,
@@ -84,11 +186,13 @@ export class NotificationService {
         return;
       }
 
-      // Generate email template for response received
+      // Generate email template for response received with enhanced user info
       const emailTemplate = this.generateResponseReceivedTemplate(
         rfiData,
         responseStatus,
-        clientName
+        clientName,
+        responderName,
+        clientEmail
       );
 
       // Determine recipients
@@ -108,19 +212,60 @@ export class NotificationService {
         projectId: rfiData.project_id
       });
 
-      console.log(`✅ Client response notification sent for RFI ${rfiId}`);
+      console.log(`✅ Client response notification sent for RFI ${rfiId} - Response by ${responderName}`);
     } catch (error) {
       console.error('Failed to send client response notification:', error);
     }
   }
 
   /**
-   * Generate email template for response received notification
+   * Create notification for RFI link generation
+   */
+  static async notifyLinkGenerated(
+    rfiId: string,
+    generatedBy: string,
+    linkExpiresAt?: string
+  ): Promise<void> {
+    try {
+      // Get user information using admin client to bypass RLS
+      const client = getAdminClient();
+      const { data: userData, error: userError } = await client
+        .from('users')
+        .select('full_name, email')
+        .eq('id', generatedBy)
+        .single();
+
+      const userName = userData?.full_name || userData?.email || 'Unknown User';
+      const userEmail = userData?.email;
+
+      await this.createNotification({
+        rfi_id: rfiId,
+        type: 'link_generated',
+        message: `${userName} generated a secure client link${linkExpiresAt ? ` (expires ${new Date(linkExpiresAt).toLocaleDateString()})` : ''}`,
+        performed_by: generatedBy,
+        performed_by_name: userName,
+        performed_by_email: userEmail,
+        performed_by_type: 'user',
+        action_details: 'Generated secure client access link',
+        metadata: {
+          link_expires_at: linkExpiresAt,
+          generated_at: new Date().toISOString()
+        }
+      });
+    } catch (error) {
+      console.error('Failed to send link generation notification:', error);
+    }
+  }
+
+  /**
+   * Generate email template for response received notification - enhanced with user details
    */
   private static generateResponseReceivedTemplate(
     rfi: any,
     responseStatus: string,
-    clientName: string
+    clientName: string,
+    responderName: string,
+    clientEmail?: string
   ) {
     const project = rfi.projects;
     const statusColor = this.getStatusColor(responseStatus);
@@ -144,9 +289,18 @@ export class NotificationService {
     <ul style="color: #4b5563; margin: 0; padding-left: 20px;">
       <li><strong>RFI Number:</strong> ${rfi.rfi_number}</li>
       <li><strong>Subject:</strong> ${rfi.subject}</li>
-      <li><strong>Client:</strong> ${clientName}</li>
       <li><strong>Response Status:</strong> <span style="color: ${statusColor}; font-weight: bold;">${statusText}</span></li>
       <li><strong>Response Date:</strong> ${new Date().toLocaleDateString()}</li>
+    </ul>
+  </div>
+
+  <div style="background: #e0f2fe; border: 1px solid #0891b2; padding: 15px; border-radius: 6px; margin: 20px 0;">
+    <h3 style="color: #0c4a6e; margin: 0 0 10px 0;">👤 Who Responded</h3>
+    <ul style="color: #0c4a6e; margin: 0; padding-left: 20px;">
+      <li><strong>Responder:</strong> ${responderName}</li>
+      <li><strong>Company:</strong> ${clientName}</li>
+      ${clientEmail ? `<li><strong>Email:</strong> ${clientEmail}</li>` : ''}
+      <li><strong>Response Time:</strong> ${new Date().toLocaleString()}</li>
     </ul>
   </div>
 
@@ -263,7 +417,7 @@ export class NotificationService {
   }
 
   /**
-   * Get recent notifications
+   * Get enhanced recent notifications with user information
    */
   static async getRecentNotifications(limit: number = 10) {
     try {
@@ -274,8 +428,13 @@ export class NotificationService {
           rfis!inner(
             rfi_number,
             subject,
+            created_by,
             projects!inner(
               project_name
+            ),
+            users:created_by(
+              full_name,
+              email
             )
           )
         `)

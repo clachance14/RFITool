@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 import { RFITimesheetEntry, RFITimesheetSummary } from '@/lib/types';
 
 export interface TimesheetEntryFormData {
@@ -26,6 +27,7 @@ interface UseTimesheetEntriesReturn {
 }
 
 export function useTimesheetEntries(rfiId: string): UseTimesheetEntriesReturn {
+  const { session } = useAuth();
   const [entries, setEntries] = useState<RFITimesheetEntry[]>([]);
   const [totals, setTotals] = useState<RFITimesheetSummary>({
     rfi_id: rfiId,
@@ -47,7 +49,15 @@ export function useTimesheetEntries(rfiId: string): UseTimesheetEntriesReturn {
       setLoading(true);
       setError(null);
 
-      const response = await fetch(`/api/rfis/${rfiId}/timesheet-entries`);
+      if (!session?.access_token) {
+        throw new Error('User not authenticated');
+      }
+
+      const response = await fetch(`/api/rfis/${rfiId}/timesheet-entries`, {
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+      });
       const result = await response.json();
 
       if (!response.ok) {
@@ -81,17 +91,22 @@ export function useTimesheetEntries(rfiId: string): UseTimesheetEntriesReturn {
     } finally {
       setLoading(false);
     }
-  }, [rfiId]);
+  }, [rfiId, session?.access_token]);
 
   const createTimesheetEntry = useCallback(async (data: TimesheetEntryFormData) => {
     try {
       setLoading(true);
       setError(null);
 
+      if (!session?.access_token) {
+        throw new Error('User not authenticated');
+      }
+
       const response = await fetch(`/api/rfis/${rfiId}/timesheet-entries`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
         },
         body: JSON.stringify(data),
       });
@@ -113,17 +128,22 @@ export function useTimesheetEntries(rfiId: string): UseTimesheetEntriesReturn {
     } finally {
       setLoading(false);
     }
-  }, [rfiId, fetchTimesheetEntries]);
+  }, [rfiId, session?.access_token, fetchTimesheetEntries]);
 
   const updateTimesheetEntry = useCallback(async (id: string, data: TimesheetEntryFormData) => {
     try {
       setLoading(true);
       setError(null);
 
+      if (!session?.access_token) {
+        throw new Error('User not authenticated');
+      }
+
       const response = await fetch(`/api/rfis/${rfiId}/timesheet-entries/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
         },
         body: JSON.stringify(data),
       });
@@ -145,15 +165,22 @@ export function useTimesheetEntries(rfiId: string): UseTimesheetEntriesReturn {
     } finally {
       setLoading(false);
     }
-  }, [rfiId, fetchTimesheetEntries]);
+  }, [rfiId, session?.access_token, fetchTimesheetEntries]);
 
   const deleteTimesheetEntry = useCallback(async (id: string) => {
     try {
       setLoading(true);
       setError(null);
 
+      if (!session?.access_token) {
+        throw new Error('User not authenticated');
+      }
+
       const response = await fetch(`/api/rfis/${rfiId}/timesheet-entries/${id}`, {
         method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+        },
       });
 
       const result = await response.json();
@@ -173,7 +200,7 @@ export function useTimesheetEntries(rfiId: string): UseTimesheetEntriesReturn {
     } finally {
       setLoading(false);
     }
-  }, [rfiId, fetchTimesheetEntries]);
+  }, [rfiId, session?.access_token, fetchTimesheetEntries]);
 
   return {
     entries,

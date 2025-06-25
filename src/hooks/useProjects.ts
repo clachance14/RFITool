@@ -37,7 +37,13 @@ export function useProjects() {
         throw new Error('Unable to find user company association');
       }
 
-      let projectsQuery = supabase.from('projects').select('*');
+      let projectsQuery = supabase.from('projects').select(`
+        *,
+        companies (
+          name,
+          logo_url
+        )
+      `);
       
       // App owner (role_id = 0) sees ALL projects across ALL companies
       if (companyUserData.role_id === 0) {
@@ -90,7 +96,13 @@ export function useProjects() {
         throw new Error('Unable to find user company association');
       }
 
-      let projectQuery = supabase.from('projects').select('*').eq('id', id);
+      let projectQuery = supabase.from('projects').select(`
+        *,
+        companies (
+          name,
+          logo_url
+        )
+      `).eq('id', id);
       
       // App owner (role_id = 0) can access any project
       if (companyUserData.role_id === 0) {

@@ -141,28 +141,74 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Double-check that the RFI exists and is accessible
+    const { data: rfiExists, error: rfiCheckError } = await supabaseAdmin
+      .from('rfis')
+      .select('id, rfi_number, subject, client_response, stage')
+      .eq('id', rfi_id)
+      .single();
+
+    if (rfiCheckError || !rfiExists) {
+      console.error('RFI existence check failed:', rfiCheckError);
+      return NextResponse.json(
+        { error: 'RFI not found or inaccessible' },
+        { status: 404 }
+      );
+    }
+
+    console.log('RFI exists and is accessible:', {
+      id: rfiExists.id,
+      rfi_number: rfiExists.rfi_number,
+      current_stage: rfiExists.stage,
+      has_response: !!rfiExists.client_response
+    });
+
     try {
       // Update RFI with client response and advance workflow stage
+      const updateData = {
+        client_response: response,
+        client_response_submitted_by: responder_name,
+        date_responded: new Date().toISOString(),
+        stage: 'response_received',
+        updated_at: new Date().toISOString()
+      };
+
+      console.log('Attempting to update RFI with data:', {
+        rfi_id,
+        updateData,
+        clientToken: clientToken.substring(0, 10) + '...' // Partial token for debugging
+      });
+
       const { data: updatedRfi, error: updateError } = await supabaseAdmin
         .from('rfis')
-        .update({
-          client_response: response,
-          client_response_submitted_by: responder_name,
-          date_responded: new Date().toISOString(),
-          stage: 'response_received',
-          updated_at: new Date().toISOString()
-        })
+        .update(updateData)
         .eq('id', rfi_id)
         .select()
         .single();
 
       if (updateError) {
-        console.error('RFI update error:', updateError);
+        console.error('RFI update error details:', {
+          error: updateError,
+          message: updateError.message,
+          details: updateError.details,
+          hint: updateError.hint,
+          code: updateError.code
+        });
         return NextResponse.json(
-          { error: 'Failed to save response' },
+          { 
+            error: 'Failed to save response',
+            details: updateError.message,
+            code: updateError.code
+          },
           { status: 500 }
         );
       }
+
+      console.log('RFI updated successfully:', {
+        id: updatedRfi.id,
+        stage: updatedRfi.stage,
+        date_responded: updatedRfi.date_responded
+      });
 
       // Log the response submission in audit trail (optional - may not exist yet)
       try {
@@ -197,23 +243,17 @@ export async function POST(request: NextRequest) {
         console.warn('Audit logging failed:', auditError);
       }
 
-      // Send notification about the client response
+      // Send notification about the client response using enhanced notification service
       try {
-        await supabaseAdmin
-          .from('notifications')
-          .insert({
-            rfi_id: updatedRfi.id,
-            type: 'response_received',
-            message: `Client response received from ${responder_name} (${client_name || client_email || 'Client User'})`,
-            metadata: {
-              responder_name: responder_name,
-              client_name: client_name,
-              client_email: client_email,
-              response_length: response.length,
-              attachment_count: attachment_count || 0
-            },
-            is_read: false
-          });
+        const { NotificationService } = await import('@/services/notificationService');
+        await NotificationService.notifyClientResponse(
+          updatedRfi.id,
+          'submitted', // response status
+          client_name || 'Client Company',
+          responder_name,
+          client_email,
+          [] // project team emails - can be enhanced later
+        );
       } catch (notificationError) {
         // Log but don't fail the response submission
         console.error('Failed to create notification:', notificationError);

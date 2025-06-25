@@ -197,6 +197,8 @@ export interface RFI {
   days_overdue?: number;
   
   // NEW: Field Work Tracking
+  requires_field_work?: boolean;
+  field_work_description?: string;
   work_started_date?: string;
   work_completed_date?: string;
   actual_labor_hours?: number;
@@ -301,6 +303,8 @@ export interface CreateRFIInput {
   equipment_costs?: number;
   subcontractor_costs?: number;
   // Field Work Tracking
+  requires_field_work?: boolean;
+  field_work_description?: string;
   work_started_date?: string;
   work_completed_date?: string;
   actual_labor_hours?: number;
@@ -323,6 +327,8 @@ export interface UpdateRFIInput {
   response?: string | null;
   response_date?: string | null;
   // Field Work Tracking
+  requires_field_work?: boolean | null;
+  field_work_description?: string | null;
   work_started_date?: string | null;
   work_completed_date?: string | null;
   actual_labor_hours?: number | null;

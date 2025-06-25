@@ -15,12 +15,27 @@ interface Notification {
   message: string;
   is_read: boolean;
   created_at: string;
-  metadata?: Record<string, any>;
+  metadata?: {
+    performed_by?: string;
+    performed_by_name?: string;
+    performed_by_email?: string;
+    performed_by_type?: 'user' | 'client' | 'system';
+    action_details?: string;
+    response_status?: string;
+    from_status?: string;
+    to_status?: string;
+    reason?: string;
+    [key: string]: any;
+  };
   rfis?: {
     rfi_number: string;
     subject: string;
     projects: {
       project_name: string;
+    };
+    users?: {
+      full_name: string;
+      email: string;
     };
   };
 }
@@ -175,7 +190,13 @@ export default function NotificationsPage() {
     }
   };
 
-  const getNotificationIcon = (type: string) => {
+  const getNotificationIcon = (type: string, performedByType?: string) => {
+    if (performedByType === 'client') {
+      return <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+        <span className="text-sm font-semibold text-blue-600">👤</span>
+      </div>;
+    }
+    
     switch (type) {
       case 'response_received':
         return <CheckCircle className="w-5 h-5 text-green-600" />;
@@ -357,76 +378,143 @@ export default function NotificationsPage() {
               {filteredNotifications.map((notification) => (
                 <div
                   key={notification.id}
-                  className={`p-6 hover:bg-gray-50 transition-colors ${
-                    !notification.is_read ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''
-                  }`}
+                  className={`p-6 border-l-4 ${
+                    !notification.is_read 
+                      ? 'border-blue-500 bg-blue-50' 
+                      : 'border-gray-200 bg-white'
+                  } hover:shadow-md transition-shadow`}
                 >
-                  <div className="flex items-start space-x-4">
-                    <div className="flex-shrink-0 mt-1">
-                      {getNotificationIcon(notification.type)}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-2">
-                          <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                            {getNotificationTypeLabel(notification.type)}
-                          </span>
-                          {!notification.is_read && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                              New
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-sm text-gray-500">{getTimeAgo(notification.created_at)}</p>
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-start space-x-4 flex-1">
+                      <div className="flex-shrink-0 mt-1">
+                        {getNotificationIcon(notification.type, notification.metadata?.performed_by_type)}
                       </div>
-                      
-                      {notification.rfis && (
-                        <div className="mt-1">
-                          <button
-                            onClick={() => handleNotificationClick(notification)}
-                            className="text-sm font-medium text-blue-600 hover:text-blue-800 cursor-pointer text-left"
-                          >
-                            {notification.rfis.rfi_number}: {notification.rfis.subject}
-                          </button>
-                          <p className="text-xs text-gray-500 mt-1">
-                            Project: {notification.rfis.projects.project_name}
-                          </p>
-                        </div>
-                      )}
-                      
-                      <p className="text-sm text-gray-600 mt-2">{notification.message}</p>
-                      
-                      {notification.rfis && (
-                        <p className="text-xs text-blue-500 mt-1 font-medium">
-                          Click RFI title above to view details →
-                        </p>
-                      )}
-                      
-                      {notification.metadata && notification.metadata.response_status && (
-                        <div className="mt-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-2">
                           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            notification.metadata.response_status === 'approved' 
-                              ? 'bg-green-100 text-green-800'
-                              : notification.metadata.response_status === 'rejected'
-                                ? 'bg-red-100 text-red-800'
-                                : 'bg-yellow-100 text-yellow-800'
+                            notification.type === 'response_received' ? 'bg-green-100 text-green-800' :
+                            notification.type === 'status_changed' ? 'bg-yellow-100 text-yellow-800' :
+                            notification.type === 'link_generated' ? 'bg-blue-100 text-blue-800' :
+                            'bg-gray-100 text-gray-800'
                           }`}>
-                            {notification.metadata.response_status.replace('_', ' ').toUpperCase()}
+                            {notification.type.replace('_', ' ').toUpperCase()}
+                          </span>
+                          <span className="text-sm text-gray-500">
+                            {new Date(notification.created_at).toLocaleString()}
                           </span>
                         </div>
-                      )}
 
-                      {!notification.is_read && (
-                        <div className="mt-4">
-                          <Button
-                            onClick={() => markAsRead(notification.rfi_id)}
-                            variant="outline"
-                            size="sm"
-                          >
-                            Mark as Read
-                          </Button>
-                        </div>
-                      )}
+                        {/* Enhanced user information display */}
+                        {notification.metadata?.performed_by_name && (
+                          <div className="mb-3 p-3 bg-gray-50 rounded-lg">
+                            <div className="flex items-center space-x-3">
+                              <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold ${
+                                notification.metadata.performed_by_type === 'client' 
+                                  ? 'bg-blue-500'
+                                  : notification.metadata.performed_by_type === 'system'
+                                    ? 'bg-gray-500'
+                                    : 'bg-green-500'
+                              }`}>
+                                {notification.metadata.performed_by_type === 'client' ? '👤' : 
+                                 notification.metadata.performed_by_type === 'system' ? '🤖' : '👨‍💼'}
+                              </div>
+                              <div className="flex-1">
+                                <p className="font-medium text-gray-900">
+                                  {notification.metadata.performed_by_name}
+                                </p>
+                                <div className="flex items-center space-x-2 text-sm text-gray-500">
+                                  <span className={`px-2 py-0.5 rounded-full text-xs ${
+                                    notification.metadata.performed_by_type === 'client' 
+                                      ? 'bg-blue-100 text-blue-700'
+                                      : notification.metadata.performed_by_type === 'system'
+                                        ? 'bg-gray-100 text-gray-700'
+                                        : 'bg-green-100 text-green-700'
+                                  }`}>
+                                    {notification.metadata.performed_by_type}
+                                  </span>
+                                  {notification.metadata.performed_by_email && (
+                                    <span>{notification.metadata.performed_by_email}</span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {notification.metadata.action_details && (
+                              <div className="mt-2 text-sm text-gray-600">
+                                <strong>Action:</strong> {notification.metadata.action_details}
+                              </div>
+                            )}
+
+                            {/* Status change details */}
+                            {notification.type === 'status_changed' && 
+                             notification.metadata.from_status && 
+                             notification.metadata.to_status && (
+                              <div className="mt-2 flex items-center space-x-2 text-sm">
+                                <span className="px-2 py-1 bg-red-100 text-red-700 rounded">
+                                  {notification.metadata.from_status}
+                                </span>
+                                <span className="text-gray-400">→</span>
+                                <span className="px-2 py-1 bg-green-100 text-green-700 rounded">
+                                  {notification.metadata.to_status}
+                                </span>
+                                {notification.metadata.reason && (
+                                  <span className="text-gray-500">
+                                    ({notification.metadata.reason})
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {notification.rfis && (
+                          <div className="mt-1">
+                            <button
+                              onClick={() => handleNotificationClick(notification)}
+                              className="text-sm font-medium text-blue-600 hover:text-blue-800 cursor-pointer text-left"
+                            >
+                              {notification.rfis.rfi_number}: {notification.rfis.subject}
+                            </button>
+                            <p className="text-xs text-gray-500 mt-1">
+                              📁 Project: {notification.rfis.projects.project_name}
+                            </p>
+                          </div>
+                        )}
+                        
+                        <p className="text-sm text-gray-600 mt-2">{notification.message}</p>
+                        
+                        {notification.rfis && (
+                          <p className="text-xs text-blue-500 mt-1 font-medium">
+                            Click RFI title above to view details →
+                          </p>
+                        )}
+                        
+                        {notification.metadata && notification.metadata.response_status && (
+                          <div className="mt-3">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                              notification.metadata.response_status === 'approved' 
+                                ? 'bg-green-100 text-green-800'
+                                : notification.metadata.response_status === 'rejected'
+                                  ? 'bg-red-100 text-red-800'
+                                  : 'bg-yellow-100 text-yellow-800'
+                            }`}>
+                              {notification.metadata.response_status.replace('_', ' ').toUpperCase()}
+                            </span>
+                          </div>
+                        )}
+
+                        {!notification.is_read && (
+                          <div className="mt-4">
+                            <Button
+                              onClick={() => markAsRead(notification.rfi_id)}
+                              variant="outline"
+                              size="sm"
+                            >
+                              Mark as Read
+                            </Button>
+                          </div>
+                        )}
+                      </div>
                     </div>
                     <div className="flex-shrink-0 ml-4">
                       <Button

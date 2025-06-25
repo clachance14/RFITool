@@ -72,18 +72,20 @@ export function RFILog() {
     }
   };
 
-  const calculateTotalCost = (rfi: RFI): number => {
-    // If RFI has cost_items, calculate from those
-    if (rfi.cost_items && rfi.cost_items.length > 0) {
-      return rfi.cost_items.reduce((total, item) => total + (item.quantity * item.unit_cost), 0);
+  const calculateActualCost = (rfi: RFI): number => {
+    // First try timesheet summary if available (most accurate actual costs)
+    if (rfi.timesheet_summary?.total_cost) {
+      return rfi.timesheet_summary.total_cost;
     }
     
-    // Otherwise, use legacy cost fields
-    const laborCosts = rfi.labor_costs || 0;
-    const materialCosts = rfi.material_costs || 0;
-    const equipmentCosts = rfi.equipment_costs || 0;
-    const subcontractorCosts = rfi.subcontractor_costs || 0;
-    return laborCosts + materialCosts + equipmentCosts + subcontractorCosts;
+    // Fall back to individual actual cost fields if populated
+    const actualLaborCost = rfi.actual_labor_cost || 0;
+    const actualMaterialCost = rfi.actual_material_cost || 0;
+    const actualEquipmentCost = rfi.actual_equipment_cost || 0;
+    const actualTotalCost = rfi.actual_total_cost || 0;
+    
+    // Use actual_total_cost if available, otherwise sum individual components
+    return actualTotalCost || (actualLaborCost + actualMaterialCost + actualEquipmentCost);
   };
 
   const formatCurrency = (amount: number): string => {
@@ -365,7 +367,7 @@ export function RFILog() {
                     </div>
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Total Cost
+                    Actual Cost
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Actions
@@ -430,8 +432,8 @@ export function RFILog() {
                         {format(new Date(rfi.created_at), 'MMM dd, yyyy')}
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
-                        <span className={`font-medium ${calculateTotalCost(rfi) > 0 ? 'text-red-600' : 'text-gray-500'}`}>
-                          {formatCurrency(calculateTotalCost(rfi))}
+                        <span className={`font-medium ${calculateActualCost(rfi) > 0 ? 'text-green-600' : 'text-gray-500'}`}>
+                          {formatCurrency(calculateActualCost(rfi))}
                         </span>
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm">

@@ -16,7 +16,9 @@ const supabaseAdmin = createClient(
 
 const generateLinkSchema = z.object({
   expirationDays: z.number().min(1).max(365).optional(),
-  allowMultipleResponses: z.boolean().optional()
+  allowMultipleResponses: z.boolean().optional(),
+  user_id: z.string().optional(),
+  user_email: z.string().email().optional()
 });
 
 export async function POST(
@@ -34,7 +36,7 @@ export async function POST(
       );
     }
 
-    // Parse request body
+    // Parse request body first to get user information
     const body = await request.json().catch(() => ({}));
     const validatedOptions = generateLinkSchema.safeParse(body);
     
@@ -45,8 +47,81 @@ export async function POST(
       );
     }
 
-    const { expirationDays = 30, allowMultipleResponses = false } = validatedOptions.data;
+    const { expirationDays = 30, allowMultipleResponses = false, user_id, user_email } = validatedOptions.data;
+
+    // Get user information - prioritize what's passed in the request
+    let userId = user_id || null;
+    let userName = 'Unknown User';
+    let userEmail = user_email || null;
+
+    if (userId) {
+      // Get user's full name from users table
+      const { data: userData, error: userDataError } = await supabaseAdmin
+        .from('users')
+        .select('full_name, email')
+        .eq('id', userId)
+        .single();
+      
+      console.log('User data result:', { userData, error: userDataError });
+      
+      if (userData?.full_name) {
+        userName = userData.full_name;
+      } else if (userData?.email) {
+        userName = userData.email;
+      } else if (userEmail) {
+        userName = userEmail;
+      }
+      
+      console.log('Final user info:', { userId, userName, userEmail });
+    } else {
+      console.warn('No user ID provided in request');
+    }
+
+    // Get user authentication from cookies (this is how Next.js/Supabase auth works)
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
     
+    // Create a client with the request's cookies to get authenticated user
+    const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      },
+      global: {
+        headers: {
+          Authorization: request.headers.get('Authorization') || '',
+        }
+      }
+    });
+
+    // Extract cookies and set them for the client
+    const cookieStore = request.headers.get('cookie');
+    if (cookieStore) {
+      // Parse cookies and extract auth tokens
+      const cookies = cookieStore.split(';').reduce((acc, cookie) => {
+        const [key, value] = cookie.trim().split('=');
+        if (key && value) {
+          acc[key] = decodeURIComponent(value);
+        }
+        return acc;
+      }, {} as Record<string, string>);
+
+      // Set auth session from cookies if available
+      const accessToken = cookies['sb-access-token'] || cookies['supabase.auth.token'];
+      const refreshToken = cookies['sb-refresh-token'] || cookies['supabase.auth.refresh-token'];
+      
+      if (accessToken) {
+        try {
+          await supabaseClient.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken || ''
+          });
+        } catch (sessionError) {
+          console.warn('Could not set session from cookies:', sessionError);
+        }
+      }
+    }
+
     // First verify the RFI exists and get project data for contextual token
     const { data: rfiWithProject, error: selectError } = await supabaseAdmin
       .from('rfis')
@@ -147,26 +222,43 @@ export async function POST(
       console.warn('Failed to update RFI status/stage:', updateError);
     }
 
-    // Create notification for link generation
+    // Create notification with enhanced user tracking
     try {
-      await supabaseAdmin
-        .from('notifications')
-        .insert({
-          rfi_id: rfiId,
-          type: 'link_generated',
-          message: 'Secure client link generated and RFI sent to client',
-          metadata: {
-            secure_link_generated: true,
-            expires_at: linkData.expires_at,
-            status_changed_to: 'active',
-            stage_changed_to: 'sent_to_client',
-            contextual_token: linkData.token
-          },
-          is_read: false
-        });
+      if (userId) {
+        // Use the enhanced notification service
+        const { NotificationService } = await import('@/services/notificationService');
+        await NotificationService.notifyLinkGenerated(
+          rfiId,
+          userId,
+          linkData.expires_at
+        );
+        console.log('✅ Enhanced notification created for user:', userName);
+      } else {
+        // Create notification with available user info (fallback)
+        await supabaseAdmin
+          .from('notifications')
+          .insert({
+            rfi_id: rfiId,
+            type: 'link_generated',
+            message: `${userName} generated a secure client link`,
+            metadata: {
+              performed_by_type: 'user',
+              performed_by_name: userName,
+              performed_by_email: userEmail,
+              action_details: 'Generated secure client access link',
+              secure_link_generated: true,
+              expires_at: linkData.expires_at,
+              status_changed_to: 'active',
+              stage_changed_to: 'sent_to_client',
+              contextual_token: linkData.token
+            },
+            is_read: false
+          });
+        console.log('✅ Fallback notification created for user:', userName);
+      }
     } catch (notificationError) {
-      // Log but don't fail the link generation if notification fails
-      console.warn('Failed to create link generation notification:', notificationError);
+      console.error('Failed to create link generation notification:', notificationError);
+      // Don't fail the entire request if notification fails
     }
 
     return NextResponse.json({

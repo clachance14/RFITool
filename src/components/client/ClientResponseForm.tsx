@@ -75,7 +75,15 @@ export function ClientResponseForm({
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to submit response');
+        console.error('Response submission failed:', {
+          status: response.status,
+          statusText: response.statusText,
+          errorData
+        });
+        
+        // Show more specific error message if available
+        const errorMessage = errorData.details || errorData.error || 'Failed to submit response';
+        throw new Error(errorMessage);
       }
 
       const result = await response.json();
@@ -100,7 +108,7 @@ export function ClientResponseForm({
       const errorMessage = error instanceof Error ? error.message : 'Failed to submit response';
       setError(errorMessage);
       
-      // Show error toast
+      // Show error toast with more details
       toast({
         title: "Submission Failed",
         description: errorMessage,

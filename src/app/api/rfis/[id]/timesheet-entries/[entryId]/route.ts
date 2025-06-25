@@ -1,5 +1,50 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase, getSupabaseAdmin } from '@/lib/supabase';
+import { createClient } from '@supabase/supabase-js';
+
+// Initialize Supabase admin client
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  }
+);
+
+// Helper function to verify user access to RFI
+async function verifyUserAccess(user: any, rfiId: string) {
+  // Verify user has access to this RFI through company association
+  const { data: userCompany, error: companyError } = await supabaseAdmin
+    .from('company_users')
+    .select('company_id')
+    .eq('user_id', user.id)
+    .single();
+
+  if (companyError || !userCompany) {
+    return { authorized: false, error: 'Unable to determine user company' };
+  }
+
+  // Verify RFI belongs to user's company
+  const { data: rfiProject, error: rfiError } = await supabaseAdmin
+    .from('rfis')
+    .select(`
+      id,
+      projects!inner(
+        company_id
+      )
+    `)
+    .eq('id', rfiId)
+    .eq('projects.company_id', userCompany.company_id)
+    .single();
+
+  if (rfiError || !rfiProject) {
+    return { authorized: false, error: 'RFI not found or access denied' };
+  }
+
+  return { authorized: true, error: null };
+}
 
 // GET /api/rfis/[id]/timesheet-entries/[entryId] - Get a specific timesheet entry
 export async function GET(
@@ -16,7 +61,35 @@ export async function GET(
       );
     }
 
-    const { data: entry, error } = await supabase
+    // Get authenticated user
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    const token = authHeader.split(' ')[1];
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+
+    if (authError || !user) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    // Verify user access
+    const { authorized, error: accessError } = await verifyUserAccess(user, rfiId);
+    if (!authorized) {
+      return NextResponse.json(
+        { error: accessError },
+        { status: 403 }
+      );
+    }
+
+    const { data: entry, error } = await supabaseAdmin
       .from('rfi_timesheet_entries')
       .select('*')
       .eq('id', entryId)
@@ -67,25 +140,36 @@ export async function PUT(
       );
     }
 
-    // Get the first user from the database for created_by field
-    // TODO: Implement proper authentication later
-    const supabaseAdmin = getSupabaseAdmin();
-    const { data: users, error: usersError } = await supabaseAdmin
-      .from('users')
-      .select('id')
-      .limit(1);
-    
-    if (usersError || !users || users.length === 0) {
+    // Get authenticated user
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
       return NextResponse.json(
-        { error: 'Unable to determine user for timesheet entry' },
-        { status: 500 }
+        { error: 'Unauthorized' },
+        { status: 401 }
       );
     }
-    
-    const userId = users[0].id;
+
+    const token = authHeader.split(' ')[1];
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+
+    if (authError || !user) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    // Verify user access
+    const { authorized, error: accessError } = await verifyUserAccess(user, rfiId);
+    if (!authorized) {
+      return NextResponse.json(
+        { error: accessError },
+        { status: 403 }
+      );
+    }
 
     // Check if the entry exists and belongs to this RFI
-    const { data: existing, error: checkError } = await supabase
+    const { data: existing, error: checkError } = await supabaseAdmin
       .from('rfi_timesheet_entries')
       .select('id, timesheet_number')
       .eq('id', entryId)
@@ -120,7 +204,7 @@ export async function PUT(
 
     // Check if timesheet number conflicts with another entry (if changed)
     if (timesheet_number !== existing.timesheet_number) {
-      const { data: conflict, error: conflictError } = await supabase
+      const { data: conflict, error: conflictError } = await supabaseAdmin
         .from('rfi_timesheet_entries')
         .select('id')
         .eq('rfi_id', rfiId)
@@ -145,7 +229,7 @@ export async function PUT(
     }
 
     // Update the timesheet entry
-    const { data: updatedEntry, error: updateError } = await supabase
+    const { data: updatedEntry, error: updateError } = await supabaseAdmin
       .from('rfi_timesheet_entries')
       .update({
         timesheet_number,
@@ -199,25 +283,36 @@ export async function DELETE(
       );
     }
 
-    // Get the first user from the database for created_by field
-    // TODO: Implement proper authentication later
-    const supabaseAdmin = getSupabaseAdmin();
-    const { data: users, error: usersError } = await supabaseAdmin
-      .from('users')
-      .select('id')
-      .limit(1);
-    
-    if (usersError || !users || users.length === 0) {
+    // Get authenticated user
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
       return NextResponse.json(
-        { error: 'Unable to determine user for timesheet entry' },
-        { status: 500 }
+        { error: 'Unauthorized' },
+        { status: 401 }
       );
     }
-    
-    const userId = users[0].id;
+
+    const token = authHeader.split(' ')[1];
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+
+    if (authError || !user) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    // Verify user access
+    const { authorized, error: accessError } = await verifyUserAccess(user, rfiId);
+    if (!authorized) {
+      return NextResponse.json(
+        { error: accessError },
+        { status: 403 }
+      );
+    }
 
     // Check if the entry exists and belongs to this RFI
-    const { data: existing, error: checkError } = await supabase
+    const { data: existing, error: checkError } = await supabaseAdmin
       .from('rfi_timesheet_entries')
       .select('id')
       .eq('id', entryId)
@@ -232,7 +327,7 @@ export async function DELETE(
     }
 
     // Delete the timesheet entry
-    const { error: deleteError } = await supabase
+    const { error: deleteError } = await supabaseAdmin
       .from('rfi_timesheet_entries')
       .delete()
       .eq('id', entryId)

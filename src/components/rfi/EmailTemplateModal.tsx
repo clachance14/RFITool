@@ -43,7 +43,8 @@ export function EmailTemplateModal({ isOpen, onClose, rfi, linkData, project }: 
       setCopiedField(field);
       setTimeout(() => setCopiedField(null), 2000);
     } catch (error) {
-      alert('Failed to copy to clipboard');
+      // Silent fail - the user can still see the content wasn't copied
+      console.error('Failed to copy to clipboard:', error);
     }
   };
 

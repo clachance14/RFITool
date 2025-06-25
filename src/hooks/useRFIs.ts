@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useCallback, useMemo } from 'react';
-import { RFI, CreateRFIInput, UpdateRFIInput, RFIStatus, RFICostItem, RFICostType, RFIAttachment } from '@/lib/types';
+import { RFI, CreateRFIInput, UpdateRFIInput, RFIStatus, RFICostItem, RFICostType, RFIAttachment, RFITimesheetSummary } from '@/lib/types';
 import { createRFISchema, updateRFISchema } from '@/lib/validations';
 import { supabase, handleSupabaseError } from '@/lib/supabase';
 import { uploadAttachment } from '@/lib/storage';
+import { RFIWorkflowService } from '@/services/rfiWorkflow';
 
 // Types for the hook
 type RFIResponse = {
@@ -153,29 +154,37 @@ export function useRFIs() {
       const { data, error } = await supabase
         .from('rfi_attachments')
         .select('*')
-        .eq('rfi_id', rfiId)
-        .order('created_at', { ascending: true });
-
+        .eq('rfi_id', rfiId);
+      
       if (error) {
-        throw error;
+        console.error('Error fetching attachments:', error);
+        return [];
       }
-
-      // Generate public URLs for each attachment
-      const attachmentsWithUrls = (data || []).map(attachment => {
-        const { data: { publicUrl } } = supabase.storage
-          .from('rfi-attachments')
-          .getPublicUrl(attachment.file_path);
-
-        return {
-          ...attachment,
-          public_url: publicUrl
-        } as RFIAttachment;
-      });
-
-      return attachmentsWithUrls;
-    } catch (err) {
-      console.error('Error fetching attachments:', err);
+      
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching attachments:', error);
       return [];
+    }
+  };
+
+  const fetchTimesheetSummary = async (rfiId: string): Promise<RFITimesheetSummary | null> => {
+    try {
+      const { data, error } = await supabase
+        .from('rfi_timesheet_summary')
+        .select('*')
+        .eq('rfi_id', rfiId)
+        .single();
+      
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error fetching timesheet summary:', error);
+        return null;
+      }
+      
+      return data || null;
+    } catch (error) {
+      console.error('Error fetching timesheet summary:', error);
+      return null;
     }
   };
 
@@ -409,11 +418,12 @@ export function useRFIs() {
         throw new Error(message);
       }
       
-      // Convert database RFIs to our RFI interface and fetch cost items and attachments
+      // Convert database RFIs to our RFI interface and fetch cost items, attachments, and timesheet summaries
       const rfisWithCostItems: RFI[] = await Promise.all(
         (data || []).map(async (rfiData) => {
           const costItems = await fetchCostItems(rfiData.id);
           const attachments = await fetchAttachments(rfiData.id);
+          const timesheetSummary = await fetchTimesheetSummary(rfiData.id);
           
           return {
             id: rfiData.id,
@@ -433,6 +443,8 @@ export function useRFIs() {
             response: rfiData.client_response,
             response_date: rfiData.date_responded,
             // Field work tracking
+            requires_field_work: rfiData.requires_field_work,
+            field_work_description: rfiData.field_work_description,
             work_started_date: rfiData.work_started_date,
             work_completed_date: rfiData.work_completed_date,
             actual_labor_hours: rfiData.actual_labor_hours,
@@ -443,6 +455,7 @@ export function useRFIs() {
             attachments: attachments.map(att => att.file_name),
             attachment_files: attachments,
             cost_items: costItems,
+            timesheet_summary: timesheetSummary || undefined,
             // Calculate legacy cost fields from cost items for compatibility
             labor_costs: costItems.filter(item => item.cost_type === 'labor').reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0) || undefined,
             material_costs: costItems.filter(item => item.cost_type === 'material').reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0) || undefined,
@@ -525,9 +538,10 @@ export function useRFIs() {
         throw new Error(message);
       }
       
-      // Fetch cost items and attachments for this RFI
+      // Fetch cost items, attachments, and timesheet summary for this RFI
       const costItems = await fetchCostItems(id);
       const attachments = await fetchAttachments(id);
+      const timesheetSummary = await fetchTimesheetSummary(id);
       
       // Convert database RFI to our RFI interface
       const rfi: RFI = {
@@ -548,6 +562,8 @@ export function useRFIs() {
         response: data.client_response,
         response_date: data.date_responded,
         // Field work tracking
+        requires_field_work: data.requires_field_work,
+        field_work_description: data.field_work_description,
         work_started_date: data.work_started_date,
         work_completed_date: data.work_completed_date,
         actual_labor_hours: data.actual_labor_hours,
@@ -558,6 +574,7 @@ export function useRFIs() {
         attachments: attachments.map(att => att.file_name),
         attachment_files: attachments,
         cost_items: costItems,
+        timesheet_summary: timesheetSummary || undefined,
         // Calculate legacy cost fields from cost items for compatibility
         labor_costs: costItems.filter(item => item.cost_type === 'labor').reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0) || undefined,
         material_costs: costItems.filter(item => item.cost_type === 'material').reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0) || undefined,
@@ -583,6 +600,23 @@ export function useRFIs() {
       // Validate input data
       const validatedData = updateRFISchema.parse(data);
       
+      // Get current user for activity logging
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) {
+        throw new Error('User not authenticated');
+      }
+
+      // Get existing RFI data to compare changes
+      const { data: existingRFI, error: fetchError } = await supabase
+        .from('rfis')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (fetchError || !existingRFI) {
+        throw new Error('RFI not found');
+      }
+
       const { data: updatedData, error } = await supabase
         .from('rfis')
         .update({
@@ -605,7 +639,89 @@ export function useRFIs() {
         throw new Error(message);
       }
 
-      const updatedRFI = updatedData as RFI;
+      // Log specific activity for significant changes
+      const changedFields: string[] = [];
+      if (validatedData.subject && existingRFI.subject !== validatedData.subject) {
+        changedFields.push('subject');
+      }
+      if (validatedData.status && existingRFI.status !== validatedData.status) {
+        changedFields.push('status');
+      }
+      if (validatedData.stage && existingRFI.stage !== validatedData.stage) {
+        changedFields.push('stage');
+      }
+      if (validatedData.response && existingRFI.client_response !== validatedData.response) {
+        changedFields.push('response');
+      }
+
+      // Log activity if there were significant changes
+      if (changedFields.length > 0) {
+        await RFIWorkflowService.logRFIActivity(
+          id,
+          user.id,
+          'updated',
+          {
+            message: `RFI updated: ${changedFields.join(', ')} changed`,
+            changed_fields: changedFields,
+            rfi_number: updatedData.rfi_number,
+            previous_values: {
+              subject: existingRFI.subject,
+              status: existingRFI.status,
+              stage: existingRFI.stage,
+              response: existingRFI.client_response
+            },
+            new_values: {
+              subject: validatedData.subject || existingRFI.subject,
+              status: validatedData.status || existingRFI.status,
+              stage: validatedData.stage || existingRFI.stage,
+              response: validatedData.response || existingRFI.client_response
+            }
+          }
+        );
+      }
+
+      // Fetch cost items and attachments for the updated RFI
+      const costItems = await fetchCostItems(id);
+      const attachments = await fetchAttachments(id);
+
+      // Convert database RFI to our RFI interface (same mapping as in getRFIById)
+      const updatedRFI: RFI = {
+        id: updatedData.id,
+        rfi_number: updatedData.rfi_number,
+        project_id: updatedData.project_id,
+        subject: updatedData.subject,
+        description: updatedData.contractor_question || '',
+        proposed_solution: updatedData.contractor_proposed_solution || undefined,
+        status: updatedData.status as any,
+        stage: updatedData.stage || null,
+        priority: 'medium' as any, // Default priority
+        assigned_to: updatedData.assigned_to,
+        due_date: updatedData.due_date,
+        created_by: updatedData.created_by,
+        created_at: updatedData.created_at,
+        updated_at: updatedData.updated_at,
+        response: updatedData.client_response,
+        response_date: updatedData.date_responded,
+        // Field work tracking
+        requires_field_work: updatedData.requires_field_work,
+        field_work_description: updatedData.field_work_description,
+        work_started_date: updatedData.work_started_date,
+        work_completed_date: updatedData.work_completed_date,
+        actual_labor_hours: updatedData.actual_labor_hours,
+        actual_labor_cost: updatedData.actual_labor_cost,
+        actual_material_cost: updatedData.actual_material_cost,
+        actual_equipment_cost: updatedData.actual_equipment_cost,
+        actual_total_cost: updatedData.actual_total_cost,
+        attachments: attachments.map(att => att.file_name),
+        attachment_files: attachments,
+        cost_items: costItems,
+        // Calculate legacy cost fields from cost items for compatibility
+        labor_costs: costItems.filter(item => item.cost_type === 'labor').reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0) || undefined,
+        material_costs: costItems.filter(item => item.cost_type === 'material').reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0) || undefined,
+        equipment_costs: costItems.filter(item => item.cost_type === 'equipment').reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0) || undefined,
+        subcontractor_costs: costItems.filter(item => item.cost_type === 'subcontractor').reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0) || undefined,
+      };
+      
       setRFIs(prev => prev.map(rfi => rfi.id === id ? updatedRFI : rfi));
       setCurrentRFI(updatedRFI);
       return updatedRFI;

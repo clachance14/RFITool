@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useProjects } from '@/hooks/useProjects';
 import { useRFIs } from '@/hooks/useRFIs';
 import { format, startOfWeek, endOfWeek } from 'date-fns';
+import type { RFI } from '@/lib/types';
 
 export function Dashboard() {
   const { projects } = useProjects();
@@ -30,21 +31,107 @@ export function Dashboard() {
     rfi.status === 'draft' || 
     rfi.status === 'active'
   ).length;
-  const overdueRFIs = projectRFIs.filter(rfi => rfi.stage === 'late_overdue').length;
+
+  // Business day calculation for 5-day overdue rule
+  const addBusinessDays = (startDate: Date, businessDays: number): Date => {
+    const result = new Date(startDate);
+    let daysAdded = 0;
+    
+    while (daysAdded < businessDays) {
+      result.setDate(result.getDate() + 1);
+      // Skip weekends (Saturday = 6, Sunday = 0)
+      if (result.getDay() !== 0 && result.getDay() !== 6) {
+        daysAdded++;
+      }
+    }
+    
+    return result;
+  };
+
+  const isRfiOverdue = (rfi: RFI): boolean => {
+    if (!rfi.created_at) return false;
+    
+    const createdDate = new Date(rfi.created_at);
+    const dueDate = addBusinessDays(createdDate, 5);
+    const today = new Date();
+    
+    // Only consider open RFIs as potentially overdue
+    const openStages = ['submitted', 'in_review', 'pending_response', 'field_work_in_progress'];
+    if (!rfi.stage || !openStages.includes(rfi.stage)) return false;
+    
+    return today > dueDate;
+  };
+
+  const overdueRFIs = projectRFIs.filter(rfi => isRfiOverdue(rfi)).length;
+
   const newRFIsThisWeek = projectRFIs.filter(rfi => {
+    if (!rfi.created_at) return false;
     const created = new Date(rfi.created_at);
     return created >= weekStart && created <= weekEnd;
   }).length;
+  
   const respondedRFIsThisWeek = projectRFIs.filter(rfi => {
     if (!rfi.response_date) return false;
     const responded = new Date(rfi.response_date);
     return responded >= weekStart && responded <= weekEnd;
   }).length;
 
-  // Overdue RFIs
-  const overdueRFIsList = projectRFIs.filter(rfi => rfi.stage === 'late_overdue');
+  // Calculate actual cost for an RFI
+  const calculateActualCost = (rfi: RFI): number => {
+    // First try timesheet summary if available (most accurate actual costs)
+    if (rfi.timesheet_summary?.total_cost) {
+      return rfi.timesheet_summary.total_cost;
+    }
+    
+    // Fall back to individual actual cost fields if populated
+    const actualLaborCost = rfi.actual_labor_cost || 0;
+    const actualMaterialCost = rfi.actual_material_cost || 0;
+    const actualEquipmentCost = rfi.actual_equipment_cost || 0;
+    const actualTotalCost = rfi.actual_total_cost || 0;
+    
+    // Use actual_total_cost if available, otherwise sum individual components
+    return actualTotalCost || (actualLaborCost + actualMaterialCost + actualEquipmentCost);
+  };
+
+  const formatCurrency = (amount: number): string => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount);
+  };
+
+  // Function to determine field work status
+  const getFieldWorkStatus = (rfi: RFI): string => {
+    // First check: Does this RFI require field work?
+    const requiresFieldWork = rfi.requires_field_work || 
+                             (rfi.field_work_description && rfi.field_work_description.trim().length > 0);
+    
+    // If no field work is required, show "None Required"
+    if (!requiresFieldWork) {
+      return 'None Required';
+    }
+    
+    // Field work IS required - check progress status
+    if (rfi.work_completed_date) {
+      return 'Completed';
+    }
+    if (rfi.stage === 'field_work_in_progress' || 
+        (rfi.work_started_date && !rfi.work_completed_date)) {
+      return 'In Progress';
+    }
+    
+    // Required but not started yet
+    return 'Not Started';
+  };
+
   // Recent RFI History (last 10)
-  const recentRFIs = [...projectRFIs].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 10);
+  const recentRFIs = [...projectRFIs].sort((a, b) => {
+    const aDate = a.created_at ? new Date(a.created_at).getTime() : 0;
+    const bDate = b.created_at ? new Date(b.created_at).getTime() : 0;
+    return bDate - aDate;
+  }).slice(0, 10);
 
   if (loading) {
     return (
@@ -100,16 +187,17 @@ export function Dashboard() {
         </div>
         {/* Client Logo */}
         <div className="w-32 h-16 flex items-center justify-center rounded print:border print:border-gray-400">
-          {(() => {
-            const clientLogo = typeof window !== 'undefined' ? localStorage.getItem('client_logo') : null;
-            return clientLogo ? (
-              <img
-                src={clientLogo}
-                alt="Client Logo"
-                className="max-w-full max-h-full object-contain"
-              />
-            ) : null;
-          })()}
+          {selectedProject?.client_logo_url ? (
+            <img
+              src={selectedProject.client_logo_url}
+              alt="Client Logo"
+              className="max-w-full max-h-full object-contain"
+            />
+          ) : (
+            <div className="bg-gray-200 w-full h-full flex items-center justify-center rounded">
+              <span className="text-xs text-gray-500">No Logo</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -125,7 +213,7 @@ export function Dashboard() {
         </div>
         <div className="bg-gray-50 rounded p-4 border print:border-gray-300">
           <div className="text-xs text-gray-500">Project Manager</div>
-          <div className="font-semibold">{selectedProject?.project_manager_contact || '-'}</div>
+          <div className="font-semibold">{selectedProject?.client_contact_name || '-'}</div>
         </div>
       </div>
 
@@ -158,28 +246,15 @@ export function Dashboard() {
 
           {/* Detailed Status Section */}
           <div className="mb-8 print:mb-4">
-            <h2 className="text-lg font-bold mb-2">Overdue RFIs</h2>
-            <RfiTable rfis={overdueRFIsList} emptyMessage="No overdue RFIs." />
-          </div>
-          <div className="mb-8 print:mb-4">
             <h2 className="text-lg font-bold mb-2">Recent RFI History (Last 10)</h2>
-            <RfiTable rfis={recentRFIs} emptyMessage="No recent RFIs." />
-          </div>
-
-          {/* Visualizations Section */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 print:gap-4">
-            <div className="bg-gray-50 rounded p-4 border flex flex-col items-center print:border-gray-300">
-              <h3 className="font-semibold mb-2">Open RFIs by Status</h3>
-              <div className="w-40 h-40 flex items-center justify-center bg-gray-200 rounded-full">
-                <span className="text-gray-500 text-xs">[Pie Chart Placeholder]</span>
-              </div>
-            </div>
-            <div className="bg-gray-50 rounded p-4 border flex flex-col items-center print:border-gray-300">
-              <h3 className="font-semibold mb-2">RFI Activity This Week</h3>
-              <div className="w-full h-40 flex items-center justify-center bg-gray-200 rounded">
-                <span className="text-gray-500 text-xs">[Bar Chart Placeholder]</span>
-              </div>
-            </div>
+            <RfiTable 
+              rfis={recentRFIs} 
+              emptyMessage="No recent RFIs." 
+              calculateActualCost={calculateActualCost}
+              formatCurrency={formatCurrency}
+              getFieldWorkStatus={getFieldWorkStatus}
+              isRfiOverdue={isRfiOverdue}
+            />
           </div>
         </>
       )}
@@ -196,10 +271,35 @@ function SummaryCard({ label, value }: { label: string; value: number }) {
   );
 }
 
-function RfiTable({ rfis, emptyMessage }: { rfis: any[]; emptyMessage: string }) {
+interface RfiTableProps {
+  rfis: any[];
+  emptyMessage: string;
+  calculateActualCost: (rfi: RFI) => number;
+  formatCurrency: (amount: number) => string;
+  getFieldWorkStatus: (rfi: RFI) => string;
+  isRfiOverdue: (rfi: RFI) => boolean;
+}
+
+function RfiTable({ rfis, emptyMessage, calculateActualCost, formatCurrency, getFieldWorkStatus, isRfiOverdue }: RfiTableProps) {
   if (!rfis || rfis.length === 0) {
     return <div className="text-gray-400 text-sm italic p-4">{emptyMessage}</div>;
   }
+
+  const getFieldWorkStatusColor = (status: string) => {
+    switch (status) {
+      case 'In Progress':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'Completed':
+        return 'bg-green-100 text-green-800';
+      case 'None Required':
+        return 'bg-blue-100 text-blue-800';
+      case 'Not Started':
+        return 'bg-gray-100 text-gray-600';
+      default:
+        return 'bg-gray-100 text-gray-600';
+    }
+  };
+
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full border border-gray-200 rounded">
@@ -208,28 +308,39 @@ function RfiTable({ rfis, emptyMessage }: { rfis: any[]; emptyMessage: string })
             <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">RFI #</th>
             <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Subject</th>
             <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Status</th>
+            <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Field Work</th>
             <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Created</th>
-            <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Due</th>
-            <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Attachments</th>
+            <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Actual Cost</th>
             <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Response</th>
           </tr>
         </thead>
         <tbody>
-          {rfis.map(rfi => (
-            <tr key={rfi.id} className="border-t">
-              <td className="px-3 py-2 text-sm">{rfi.rfi_number}</td>
-              <td className="px-3 py-2 text-sm">{rfi.subject}</td>
-              <td className="px-3 py-2 text-sm capitalize">{rfi.status}</td>
-              <td className="px-3 py-2 text-sm">{rfi.created_at ? format(new Date(rfi.created_at), 'MMM d, yyyy') : '-'}</td>
-              <td className="px-3 py-2 text-sm">{rfi.due_date ? format(new Date(rfi.due_date), 'MMM d, yyyy') : '-'}</td>
-              <td className="px-3 py-2 text-sm">
-                {rfi.attachment_files && rfi.attachment_files.length > 0 ? (
-                  <span className="text-blue-600 font-medium">{rfi.attachment_files.length}</span>
-                ) : (
-                  <span className="text-gray-400">0</span>
-                )}
+          {rfis.map((rfi, index) => (
+            <tr key={rfi.id || index} className="border-b border-gray-200 hover:bg-gray-50">
+              <td className="px-4 py-3 text-sm">
+                <div className="flex items-center gap-2">
+                  <span>{rfi.rfi_number || 'N/A'}</span>
+                  {isRfiOverdue(rfi) && (
+                    <span className="text-yellow-600" title="This RFI is overdue (>5 business days)">
+                      ⚠️
+                    </span>
+                  )}
+                </div>
               </td>
-              <td className="px-3 py-2 text-sm">{rfi.response ? 'Yes' : 'No'}</td>
+              <td className="px-4 py-3 text-sm">{rfi.subject || '-'}</td>
+              <td className="px-4 py-3 text-sm">{rfi.status}</td>
+              <td className="px-4 py-3 text-sm">
+                <span className={`px-2 py-1 rounded-full text-xs font-medium ${getFieldWorkStatusColor(getFieldWorkStatus(rfi))}`}>
+                  {getFieldWorkStatus(rfi)}
+                </span>
+              </td>
+              <td className="px-4 py-3 text-sm">{rfi.created_at ? format(new Date(rfi.created_at), 'MMM d, yyyy') : '-'}</td>
+              <td className="px-4 py-3 text-sm">
+                <span className="text-green-600 font-medium">
+                  {formatCurrency(calculateActualCost(rfi))}
+                </span>
+              </td>
+              <td className="px-4 py-3 text-sm">{rfi.response ? 'Yes' : 'No'}</td>
             </tr>
           ))}
         </tbody>

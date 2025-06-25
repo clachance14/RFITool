@@ -221,12 +221,12 @@ export async function POST(
     // Send notification about the client response
     try {
       const clientName = validation.rfi.projects?.client_company_name || 'Client';
+      const responderName = validatedResponse.data.client_response_submitted_by || 'Unknown User';
       await NotificationService.notifyClientResponse(
         updatedRFI.id,
         validatedResponse.data.response_status,
         clientName,
-        // You can add project team emails here if available
-        []
+        responderName
       );
     } catch (notificationError) {
       // Log but don't fail the response submission

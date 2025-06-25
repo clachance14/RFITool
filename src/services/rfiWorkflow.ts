@@ -1,5 +1,6 @@
 import { RFIStatusLegacy } from '@/lib/types';
 import { supabase, handleSupabaseError } from '@/lib/supabase';
+import { NotificationService } from './notificationService';
 
 export interface RFIWorkflowTransition {
   from: RFIStatusLegacy;
@@ -410,6 +411,14 @@ export class RFIWorkflowService {
 
       // Log the transition
       await this.logStatusTransition(rfiId, currentStatus, targetStatus, userId);
+      
+      // Also log to general activity table
+      await this.logActivity(rfiId, userId, 'status_changed', {
+        message: `Status changed from ${currentStatus} to ${targetStatus}`,
+        from_status: currentStatus,
+        to_status: targetStatus,
+        reason: additionalData?.reason
+      });
 
       return {
         success: true,
@@ -424,15 +433,17 @@ export class RFIWorkflowService {
   }
 
   /**
-   * Log status transitions for audit trail
+   * Log status transitions for audit trail and create notifications
    */
   private static async logStatusTransition(
     rfiId: string,
     fromStatus: RFIStatusLegacy,
     toStatus: RFIStatusLegacy,
-    userId: string
+    userId: string,
+    reason?: string
   ): Promise<void> {
     try {
+      // Log to audit trail
       await supabase
         .from('rfi_status_logs')
         .insert({
@@ -440,12 +451,62 @@ export class RFIWorkflowService {
           from_status: fromStatus,
           to_status: toStatus,
           changed_by: userId,
-          changed_at: new Date().toISOString()
+          changed_at: new Date().toISOString(),
+          reason: reason
         });
+
+      // Create notification with enhanced user tracking
+      await NotificationService.notifyStatusChange(
+        rfiId,
+        fromStatus,
+        toStatus,
+        userId,
+        reason
+      );
+
+      console.log(`✅ Status transition logged and notification sent: ${fromStatus} → ${toStatus} by ${userId}`);
     } catch (error) {
       // Log error but don't fail the main operation
       console.warn('Failed to log status transition:', error);
     }
+  }
+
+  /**
+   * Log general RFI activity for comprehensive tracking
+   */
+  private static async logActivity(
+    rfiId: string,
+    userId: string,
+    activityType: string,
+    details: Record<string, any> = {}
+  ): Promise<void> {
+    try {
+      await supabase
+        .from('rfi_activity')
+        .insert({
+          rfi_id: rfiId,
+          user_id: userId,
+          activity_type: activityType,
+          details: details,
+          created_at: new Date().toISOString()
+        });
+
+      console.log(`✅ Activity logged: ${activityType} for RFI ${rfiId} by ${userId}`);
+    } catch (error) {
+      console.warn('Failed to log activity:', error);
+    }
+  }
+
+  /**
+   * Public method to log activities from other parts of the application
+   */
+  static async logRFIActivity(
+    rfiId: string,
+    userId: string,
+    activityType: string,
+    details: Record<string, any> = {}
+  ): Promise<void> {
+    return this.logActivity(rfiId, userId, activityType, details);
   }
 
   /**

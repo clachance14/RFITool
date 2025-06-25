@@ -18,7 +18,8 @@
     "test:e2e:report": "playwright show-report"
   },
   "dependencies": {
-    "@hookform/resolvers": "^3.10.0",
+    "@anthropic-ai/sdk": "^0.54.0",
+        "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-alert-dialog": "^1.0.5",
     "@radix-ui/react-dialog": "^1.0.5",
     "@radix-ui/react-label": "^2.0.2",
@@ -47,7 +48,7 @@
     "xlsx": "^0.18.5",
     "zod": "^3.22.4"
   },
-  "devDependencies": {
+    "devDependencies": {
     "@playwright/test": "^1.52.0",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^14.3.1",

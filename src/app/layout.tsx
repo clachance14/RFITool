@@ -5,6 +5,7 @@ import { AuthProvider } from '@/contexts/AuthContext'
 import { RFIProvider } from '@/contexts/RFIContext'
 import LayoutWrapper from '@/components/LayoutWrapper'
 import AuthGuard from '@/components/AuthGuard'
+import { ToastProvider } from '@/components/ui/ToastProvider'
 
 export const metadata: Metadata = {
   title: {
@@ -25,9 +26,11 @@ export default function RootLayout({
         <AuthProvider>
           <AuthGuard>
             <RFIProvider>
-              <LayoutWrapper>
-                {children}
-              </LayoutWrapper>
+              <ToastProvider>
+                <LayoutWrapper>
+                  {children}
+                </LayoutWrapper>
+              </ToastProvider>
               <Toaster position="top-right" />
             </RFIProvider>
           </AuthGuard>
