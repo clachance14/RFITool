@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import * as Sentry from '@sentry/nextjs'
 import './globals.css'
 import { Toaster } from 'react-hot-toast'
 import { AuthProvider } from '@/contexts/AuthContext'
@@ -7,12 +8,17 @@ import LayoutWrapper from '@/components/LayoutWrapper'
 import AuthGuard from '@/components/AuthGuard'
 import { ToastProvider } from '@/components/ui/ToastProvider'
 
-export const metadata: Metadata = {
-  title: {
-    template: '%s | RFITrak',
-    default: 'RFITrak - RFI Management for Contractors',
-  },
-  description: 'An RFI management tool for general contractors.',
+export function generateMetadata(): Metadata {
+  return {
+    title: {
+      template: '%s | RFITrak',
+      default: 'RFITrak - RFI Management for Contractors',
+    },
+    description: 'An RFI management tool for general contractors.',
+    other: {
+      ...Sentry.getTraceData()
+    }
+  }
 }
 
 export default function RootLayout({

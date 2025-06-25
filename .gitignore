@@ -67,3 +67,6 @@ production-*.png
 # OS generated files
 Thumbs.db
 ehthumbs.db
+
+# Sentry Config File
+.env.sentry-build-plugin
