@@ -1,0 +1,128 @@
+# CodeRabbit Configuration for RFITrak - Enterprise RFI Management System
+language: en-US
+tone_instructions: |
+  - Focus on enterprise security and best practices for RFI management
+  - Pay special attention to Supabase RLS policies and database security
+  - Review Next.js 14 patterns and TypeScript strict compliance
+  - Emphasize performance, maintainability, and testing completeness
+  - Consider multi-tenant data isolation requirements
+  - Flag potential security vulnerabilities in construction data handling
+
+early_access: false
+reviews:
+  profile: chill
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_empty_files: true
+  auto_review:
+    enabled: true
+    drafts: false
+  
+  # RFITrak-specific file patterns
+  path_filters:
+    - "!**/*.test.ts"
+    - "!**/*.test.tsx"
+    - "!**/*.spec.ts" 
+    - "!**/*.spec.tsx"
+    - "!docs/**"
+    - "!scripts/**"
+    - "!__tests__/**"
+    - "!tests/**"
+    - "!*.md"
+    - "src/**"
+    - "**/*.ts"
+    - "**/*.tsx"
+    - "**/*.js"
+    - "**/*.jsx"
+    - "next.config.js"
+    - "tailwind.config.js"
+
+  # Focus areas for review
+  focus:
+    - security
+    - performance
+    - best_practices
+    - testing
+    - maintainability
+
+chat:
+  auto_reply: true
+  
+# Custom instructions for RFITrak codebase
+knowledge_base:
+  learnings:
+    - "RFITrak is an enterprise-grade RFI management system for construction projects"
+    - "Built with Next.js 14, TypeScript, Supabase (PostgreSQL), and Tailwind CSS"
+    - "Implements Row Level Security (RLS) for multi-tenant data isolation"
+    - "Features real-time notifications and comprehensive cost tracking"
+    - "Uses comprehensive E2E testing with Jest, React Testing Library, and Playwright"
+    - "Production-ready with 12-week construction project simulation testing"
+    - "Security is critical - all database operations must respect RLS policies"
+    - "Supports multiple user roles: Owner, Admin, RFI User, View Only, Client"
+    - "Client collaboration includes secure external access and document sharing"
+    - "Timesheet integration for cost tracking with automated calculations"
+
+# Component-specific review instructions
+path_instructions:
+  - path: "src/components/rfi/**"
+    instructions: |
+      - Ensure all RFI components handle loading and error states properly
+      - Verify proper TypeScript typing with RFI data interfaces
+      - Check for proper cleanup in useEffect hooks
+      - Validate form handling and data validation
+      - Ensure proper role-based UI rendering
+      
+  - path: "src/app/api/**"
+    instructions: |
+      - CRITICAL: Verify all API routes implement proper RLS security
+      - Check for SQL injection vulnerabilities in database queries
+      - Ensure proper error handling and appropriate HTTP status codes
+      - Validate input parameters and sanitization
+      - Check for proper authentication and authorization
+      - Verify multi-tenant data isolation
+      
+  - path: "src/hooks/**"
+    instructions: |
+      - Verify proper cleanup in useEffect hooks to prevent memory leaks
+      - Check for correct dependency arrays in hooks
+      - Ensure proper TypeScript return types and generics
+      - Validate error handling in custom hooks
+      - Check for proper loading states and race condition handling
+      
+  - path: "src/contexts/**"
+    instructions: |
+      - Ensure proper TypeScript typing for context providers
+      - Check for proper error boundaries and fallback states
+      - Validate state management patterns and immutability
+      - Ensure proper provider composition and nesting
+      
+  - path: "src/services/**"
+    instructions: |
+      - Verify proper error handling and retry logic
+      - Check for proper TypeScript interfaces for service responses
+      - Ensure proper logging and debugging capabilities
+      - Validate caching strategies and data freshness
+      - Check for proper rate limiting and API quotas
+      
+  - path: "src/lib/**"
+    instructions: |
+      - Ensure proper utility function typing and error handling
+      - Check for proper input validation and edge case handling
+      - Verify performance optimization in utility functions
+      - Ensure proper tree-shaking and bundle optimization
+      
+  - path: "src/components/admin/**"
+    instructions: |
+      - CRITICAL: Verify admin-only features are properly secured
+      - Check for proper role-based access control
+      - Ensure sensitive operations have proper confirmation flows
+      - Validate proper audit logging for admin actions
+      
+  - path: "src/components/client/**"
+    instructions: |
+      - Ensure proper client authentication and session management
+      - Check for secure document upload and handling
+      - Validate proper external access controls
+      - Ensure proper data sanitization for client inputs 

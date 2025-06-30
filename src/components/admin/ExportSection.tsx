@@ -72,10 +72,13 @@ export function ExportSection({ className = "" }: ExportSectionProps) {
   const pdfElementRef = useRef<HTMLDivElement>(null);
   const [currentPDFRfi, setCurrentPDFRfi] = useState<any>(null);
 
-  // PDF Preview
+  // PDF Preview - Enhanced for server-side generation
   const [showPreview, setShowPreview] = useState(false);
   const [previewRfiIndex, setPreviewRfiIndex] = useState(0);
   const [previewRfis, setPreviewRfis] = useState<any[]>([]);
+  const [previewPdfUrls, setPreviewPdfUrls] = useState<string[]>([]);
+  const [generatingPreview, setGeneratingPreview] = useState(false);
+  const [useServerSidePDF, setUseServerSidePDF] = useState(true); // NEW: Toggle between methods
 
   // Fetch RFIs
   useEffect(() => {
@@ -284,7 +287,7 @@ export function ExportSection({ className = "" }: ExportSectionProps) {
     }
   };
 
-  const handlePreview = () => {
+  const handlePreview = async () => {
     const selectedData = getSelectedRFIsData();
     if (selectedData.length === 0) {
       alert('Please select at least one RFI to preview');
@@ -294,6 +297,47 @@ export function ExportSection({ className = "" }: ExportSectionProps) {
     setPreviewRfis(selectedData);
     setPreviewRfiIndex(0);
     setShowPreview(true);
+    
+    if (useServerSidePDF) {
+      // NEW: Server-side PDF generation via API
+      setGeneratingPreview(true);
+      try {
+        const response = await fetch('/api/export/pdf-previews', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rfis: selectedData })
+        });
+        
+        if (response.ok) {
+          const previews = await response.json();
+          // Convert base64 PDF data to blob URLs for preview
+          const pdfUrls = previews.map((preview: any) => {
+            const pdfBlob = new Blob([
+              Uint8Array.from(atob(preview.pdfData), c => c.charCodeAt(0))
+            ], { type: 'application/pdf' });
+            return URL.createObjectURL(pdfBlob);
+          });
+          setPreviewPdfUrls(pdfUrls);
+        } else {
+          throw new Error('Failed to generate PDF previews');
+        }
+      } catch (error) {
+        console.error('Error generating PDF previews:', error);
+        alert('Failed to generate PDF previews. Please try again.');
+        setShowPreview(false);
+      } finally {
+        setGeneratingPreview(false);
+      }
+    }
+    // EXISTING: Client-side generation will continue to work as before
+  };
+
+  // NEW: Clean up PDF preview URLs
+  const closePreview = () => {
+    setShowPreview(false);
+    // Clean up blob URLs to prevent memory leaks
+    previewPdfUrls.forEach(url => URL.revokeObjectURL(url));
+    setPreviewPdfUrls([]);
   };
 
   const handleExportFromPreview = async () => {
@@ -309,8 +353,24 @@ export function ExportSection({ className = "" }: ExportSectionProps) {
         projectName
       };
 
-      await exportService.exportSelectedRFIs(previewRfis, options, generatePDFForRFI);
-      setShowPreview(false);
+      if (useServerSidePDF) {
+        // NEW: Use server-side PDF generation
+        if (exportOptions.exportFormat === 'excel' || exportOptions.exportFormat === 'both') {
+          await exportService.exportToExcel(previewRfis, options);
+        }
+        if (exportOptions.exportFormat === 'csv') {
+          await exportService.exportToCSV(previewRfis, options);
+        }
+        if (exportOptions.exportFormat === 'pdf' || exportOptions.exportFormat === 'both') {
+          const rfiIds = previewRfis.map(rfi => rfi.id);
+          await exportService.exportRFIPackageServerSide(rfiIds, exportOptions.includeAttachments);
+        }
+      } else {
+        // EXISTING: Use original client-side method
+        await exportService.exportSelectedRFIs(previewRfis, options, generatePDFForRFI);
+      }
+      
+      closePreview();
     } catch (error) {
       console.error('Export error:', error);
       alert('Export failed. Please try again.');
@@ -367,11 +427,11 @@ export function ExportSection({ className = "" }: ExportSectionProps) {
 
   const categoryLabels = {
     basic: 'Basic Information',
-    details: 'Details',
-    dates: 'Dates',
+    details: 'RFI Content & Details',
+    dates: 'Dates & Timeline',
     files: 'Files & Attachments',
     response: 'Response Information',
-    financial: 'Financial Impact'
+    financial: 'Financial & Field Work'
   };
 
   const selectedCount = Object.values(selectedRfis).filter(Boolean).length;
@@ -457,7 +517,7 @@ export function ExportSection({ className = "" }: ExportSectionProps) {
                 ))}
               </div>
 
-              <div className="mt-4">
+              <div className="mt-4 space-y-2">
                 <label className="flex items-center space-x-2 cursor-pointer">
                   <input
                     type="checkbox"
@@ -469,6 +529,20 @@ export function ExportSection({ className = "" }: ExportSectionProps) {
                     className="rounded border-gray-300"
                   />
                   <span className="text-sm text-gray-700">Include attachments in PDF package</span>
+                </label>
+                
+                {/* NEW: PDF Generation Method Toggle */}
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={useServerSidePDF}
+                    onChange={(e) => setUseServerSidePDF(e.target.checked)}
+                    className="rounded border-gray-300"
+                  />
+                  <span className="text-sm text-gray-700">
+                    Use high-quality server-side PDF generation 
+                    <span className="text-xs text-gray-500 ml-1">(Recommended)</span>
+                  </span>
                 </label>
               </div>
             </div>
@@ -758,29 +832,29 @@ export function ExportSection({ className = "" }: ExportSectionProps) {
               <div className="flex items-center space-x-2">
                 {previewRfis.length > 1 && (
                   <div className="flex items-center space-x-2">
-                    <Button
-                      onClick={() => navigatePreview('prev')}
-                      disabled={previewRfiIndex === 0}
-                      variant="outline"
-                      size="sm"
-                    >
-                      ← Previous
-                    </Button>
-                    <span className="text-sm text-gray-600 bg-white px-2 py-1 rounded border">
-                      {previewRfiIndex + 1} of {previewRfis.length}
-                    </span>
-                    <Button
-                      onClick={() => navigatePreview('next')}
-                      disabled={previewRfiIndex === previewRfis.length - 1}
-                      variant="outline"
-                      size="sm"
-                    >
-                      Next →
-                    </Button>
+                                    <Button
+                  onClick={() => navigatePreview('prev')}
+                  disabled={previewRfiIndex === 0 || generatingPreview}
+                  variant="outline"
+                  size="sm"
+                >
+                  ← Previous
+                </Button>
+                <span className="text-sm text-gray-600 bg-white px-2 py-1 rounded border">
+                  {previewRfiIndex + 1} of {previewRfis.length}
+                </span>
+                <Button
+                  onClick={() => navigatePreview('next')}
+                  disabled={previewRfiIndex === previewRfis.length - 1 || generatingPreview}
+                  variant="outline"
+                  size="sm"
+                >
+                  Next →
+                </Button>
                   </div>
                 )}
                 <button
-                  onClick={() => setShowPreview(false)}
+                  onClick={closePreview}
                   className="text-gray-400 hover:text-gray-600 p-1"
                 >
                   <X className="w-6 h-6" />
@@ -789,18 +863,51 @@ export function ExportSection({ className = "" }: ExportSectionProps) {
             </div>
 
             {/* Modal Content */}
-            <div className="overflow-y-auto" style={{ maxHeight: 'calc(95vh - 140px)' }}>
-              <div className="p-6 bg-gray-100">
-                <div className="bg-white shadow-lg rounded-lg overflow-hidden max-w-4xl mx-auto">
-                  <div className="p-6">
-                    <RfiDetailView 
-                      rfi={previewRfis[previewRfiIndex]} 
-                      hidePrintElements={true} 
-                      includeAttachmentsInPDF={true}
-                    />
+            <div className="overflow-hidden" style={{ height: 'calc(95vh - 140px)' }}>
+              {useServerSidePDF ? (
+                // NEW: Server-side PDF preview
+                generatingPreview ? (
+                  <div className="flex items-center justify-center h-full bg-gray-50">
+                    <div className="text-center">
+                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                      <p className="text-gray-600">Generating PDF preview...</p>
+                    </div>
+                  </div>
+                ) : previewPdfUrls[previewRfiIndex] ? (
+                  <iframe
+                    src={previewPdfUrls[previewRfiIndex]}
+                    className="w-full h-full border-0"
+                    title={`PDF Preview - RFI ${previewRfis[previewRfiIndex]?.rfi_number}`}
+                  />
+                ) : (
+                  <div className="flex items-center justify-center h-full bg-gray-50">
+                    <div className="text-center">
+                      <p className="text-gray-600">Failed to generate PDF preview</p>
+                      <button
+                        onClick={() => handlePreview()}
+                        className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                      >
+                        Try Again
+                      </button>
+                    </div>
+                  </div>
+                )
+              ) : (
+                // EXISTING: Client-side HTML preview
+                <div className="overflow-y-auto h-full">
+                  <div className="p-6 bg-gray-100">
+                    <div className="bg-white shadow-lg rounded-lg overflow-hidden max-w-4xl mx-auto">
+                      <div className="p-6">
+                        <RfiDetailView 
+                          rfi={previewRfis[previewRfiIndex]} 
+                          hidePrintElements={true} 
+                          includeAttachmentsInPDF={true}
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
 
             {/* Modal Footer */}
@@ -810,24 +917,40 @@ export function ExportSection({ className = "" }: ExportSectionProps) {
               </div>
               <div className="flex items-center space-x-3">
                 <Button
-                  onClick={() => window.print()}
+                  onClick={() => {
+                    if (useServerSidePDF && previewPdfUrls[previewRfiIndex]) {
+                      // For server-side PDFs, open in new window and print
+                      const printWindow = window.open(previewPdfUrls[previewRfiIndex], '_blank');
+                      if (printWindow) {
+                        printWindow.addEventListener('load', () => {
+                          setTimeout(() => {
+                            printWindow.print();
+                          }, 250);
+                        });
+                      }
+                    } else {
+                      // For client-side rendering, use window.print
+                      window.print();
+                    }
+                  }}
                   variant="outline"
                   className="bg-green-50 border-green-200 hover:bg-green-100"
+                  disabled={generatingPreview || (useServerSidePDF && !previewPdfUrls[previewRfiIndex])}
                 >
                   <svg className="w-4 h-4 mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                   </svg>
-                  Print Current RFI
+                  {useServerSidePDF ? 'Print Current PDF' : 'Print Current RFI'}
                 </Button>
                 <Button
-                  onClick={() => setShowPreview(false)}
+                  onClick={closePreview}
                   variant="outline"
                 >
                   Close Preview
                 </Button>
                 <Button
                   onClick={handleExportFromPreview}
-                  disabled={previewRfis.length === 0 || generatingPDFs || exportOptions.selectedFields.length === 0}
+                  disabled={previewRfis.length === 0 || generatingPDFs || exportOptions.selectedFields.length === 0 || generatingPreview}
                   className="bg-blue-600 hover:bg-blue-700"
                 >
                   <Download className="w-4 h-4 mr-2" />

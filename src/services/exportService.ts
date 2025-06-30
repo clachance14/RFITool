@@ -1,4 +1,4 @@
-import * as XLSX from 'xlsx';
+import * as ExcelJS from 'exceljs';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import JSZip from 'jszip';
@@ -18,13 +18,19 @@ export const AVAILABLE_EXPORT_FIELDS: ExportField[] = [
   { key: 'rfi_number', label: 'RFI Number', type: 'text', category: 'basic' },
   { key: 'subject', label: 'Subject', type: 'text', category: 'basic' },
   { key: 'status', label: 'Status', type: 'status', category: 'basic' },
+  { key: 'stage', label: 'Stage', type: 'text', category: 'basic' },
+  { key: 'urgency', label: 'Urgency', type: 'text', category: 'basic' },
   { key: 'created_by', label: 'Created By', type: 'text', category: 'basic' },
   { key: 'assigned_to', label: 'Assigned To', type: 'text', category: 'basic' },
+  { key: 'project_name', label: 'Project Name', type: 'text', category: 'basic' },
   
-  // Details
-  { key: 'description', label: 'Description', type: 'text', category: 'details' },
-  { key: 'specification_section', label: 'Spec Section', type: 'text', category: 'details' },
-  { key: 'drawing_number', label: 'Drawing Number', type: 'text', category: 'details' },
+  // RFI Content
+  { key: 'reason_for_rfi', label: 'Reason for RFI', type: 'text', category: 'details' },
+  { key: 'contractor_question', label: 'Contractor Question', type: 'text', category: 'details' },
+  { key: 'contractor_proposed_solution', label: 'Proposed Solution', type: 'text', category: 'details' },
+  { key: 'work_impact', label: 'Work Impact', type: 'text', category: 'details' },
+  { key: 'schedule_impact', label: 'Schedule Impact', type: 'text', category: 'details' },
+  { key: 'discipline', label: 'Discipline', type: 'text', category: 'details' },
   { key: 'priority', label: 'Priority', type: 'text', category: 'details' },
   
   // Dates
@@ -32,23 +38,31 @@ export const AVAILABLE_EXPORT_FIELDS: ExportField[] = [
   { key: 'due_date', label: 'Due Date', type: 'date', category: 'dates' },
   { key: 'updated_at', label: 'Last Updated', type: 'date', category: 'dates' },
   { key: 'response_date', label: 'Response Date', type: 'date', category: 'dates' },
+  { key: 'date_sent', label: 'Date Sent', type: 'date', category: 'dates' },
+  { key: 'date_responded', label: 'Date Responded', type: 'date', category: 'dates' },
+  { key: 'date_closed', label: 'Date Closed', type: 'date', category: 'dates' },
   
   // Files
   { key: 'attachment_count', label: 'Attachment Count', type: 'number', category: 'files' },
   { key: 'attachment_files', label: 'Attachment List', type: 'text', category: 'files' },
   
-  // Response
-  { key: 'response', label: 'Response', type: 'text', category: 'response' },
-  { key: 'response_by', label: 'Response By', type: 'text', category: 'response' },
+  // Response Information
+  { key: 'response', label: 'Client Response', type: 'text', category: 'response' },
+  { key: 'response_by', label: 'Response Submitted By', type: 'text', category: 'response' },
   { key: 'cm_approval', label: 'CM Approval', type: 'text', category: 'response' },
   
-  // Financial
+  // Financial & Field Work
   { key: 'cost_impact', label: 'Cost Impact', type: 'currency', category: 'financial' },
-  { key: 'time_impact_days', label: 'Time Impact (Days)', type: 'number', category: 'financial' },
+  { key: 'requires_field_work', label: 'Requires Field Work', type: 'boolean', category: 'financial' },
+  { key: 'actual_labor_hours', label: 'Actual Labor Hours', type: 'number', category: 'financial' },
+  { key: 'actual_labor_cost', label: 'Actual Labor Cost', type: 'currency', category: 'financial' },
+  { key: 'actual_material_cost', label: 'Actual Material Cost', type: 'currency', category: 'financial' },
+  { key: 'actual_equipment_cost', label: 'Actual Equipment Cost', type: 'currency', category: 'financial' },
+  { key: 'actual_total_cost', label: 'Actual Total Cost', type: 'currency', category: 'financial' },
 ];
 
 export const DEFAULT_EXPORT_FIELDS = AVAILABLE_EXPORT_FIELDS.filter(field => 
-  ['rfi_number', 'subject', 'status', 'created_by', 'created_at', 'due_date', 'attachment_count'].includes(field.key)
+  ['rfi_number', 'subject', 'status', 'stage', 'urgency', 'created_by', 'created_at', 'due_date', 'response', 'response_by', 'attachment_count'].includes(field.key)
 );
 
 export interface ExportOptions {
@@ -106,14 +120,51 @@ export class ExportService {
           case 'assigned_to':
             value = rfi.assigned_to_name || rfi.assigned_to || '';
             break;
+          case 'response':
+            // Handle both the mapped field (response) and the database field (client_response)
+            value = rfi.response || rfi.client_response || '';
+            break;
           case 'response_by':
-            value = rfi.response_by_name || rfi.response_by || '';
+            // Map to client_response_submitted_by
+            value = rfi.response_by_name || rfi.client_response_submitted_by || '';
+            break;
+          case 'cm_approval':
+            // Map to client_cm_approval
+            value = rfi.client_cm_approval || '';
+            break;
+          case 'contractor_question':
+            value = rfi.contractor_question || rfi.description || '';
+            break;
+          case 'contractor_proposed_solution':
+            value = rfi.contractor_proposed_solution || rfi.proposed_solution || '';
+            break;
+          case 'project_name':
+            value = rfi.project_name || '';
             break;
           case 'cost_impact':
             value = rfi.cost_impact || 0;
             break;
-          case 'time_impact_days':
-            value = rfi.time_impact_days || 0;
+          case 'requires_field_work':
+            value = rfi.requires_field_work || false;
+            break;
+          case 'actual_labor_hours':
+            value = rfi.actual_labor_hours || 0;
+            break;
+          case 'actual_labor_cost':
+            value = rfi.actual_labor_cost || 0;
+            break;
+          case 'actual_material_cost':
+            value = rfi.actual_material_cost || 0;
+            break;
+          case 'actual_equipment_cost':
+            value = rfi.actual_equipment_cost || 0;
+            break;
+          case 'actual_total_cost':
+            value = rfi.actual_total_cost || 0;
+            break;
+          case 'date_closed':
+            // Handle date_closed - if it's not directly available, compute it from status/stage
+            value = rfi.date_closed || (rfi.status === 'closed' ? rfi.updated_at : null);
             break;
           default:
             value = rfi[fieldKey];
@@ -155,37 +206,68 @@ export class ExportService {
     const transformedData = this.transformRFIData(rfis, options.selectedFields);
     
     // Create workbook
-    const wb = XLSX.utils.book_new();
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('RFI Export');
     
-    // Create worksheet
-    const ws = XLSX.utils.json_to_sheet(transformedData);
-    
-    // Set column widths
-    const cols = options.selectedFields.map(fieldKey => {
+    // Add headers
+    const headers = options.selectedFields.map(fieldKey => {
       const field = AVAILABLE_EXPORT_FIELDS.find(f => f.key === fieldKey);
+      return field?.label || fieldKey;
+    });
+    worksheet.addRow(headers);
+    
+    // Add data rows
+    transformedData.forEach(row => {
+      const values = headers.map(header => row[header] || '');
+      worksheet.addRow(values);
+    });
+    
+    // Set column widths and styling
+    worksheet.columns = options.selectedFields.map((fieldKey, index) => {
+      const field = AVAILABLE_EXPORT_FIELDS.find(f => f.key === fieldKey);
+      let width: number;
       switch (field?.type) {
         case 'text':
-          return { wch: field.key === 'description' ? 50 : 20 };
+          width = field.key === 'description' ? 50 : 20;
+          break;
         case 'date':
-          return { wch: 12 };
+          width = 12;
+          break;
         case 'currency':
-          return { wch: 15 };
+          width = 15;
+          break;
         default:
-          return { wch: 15 };
+          width = 15;
       }
+      return { width, header: headers[index] };
     });
-    ws['!cols'] = cols;
     
-    // Add worksheet to workbook
-    XLSX.utils.book_append_sheet(wb, ws, 'RFI Export');
+    // Style the headers (bonus professional look!)
+    worksheet.getRow(1).font = { bold: true };
+    worksheet.getRow(1).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFE6E6FA' }
+    };
     
     // Generate filename
     const projectName = options.projectName || 'All Projects';
     const timestamp = format(new Date(), 'yyyy-MM-dd_HHmm');
     const filename = `RFI_Export_${projectName.replace(/[^a-zA-Z0-9]/g, '_')}_${timestamp}.xlsx`;
     
-    // Save file
-    XLSX.writeFile(wb, filename);
+    // Save file (more reliable download method)
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { 
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   }
 
   // Export individual RFI to PDF
@@ -281,7 +363,57 @@ export class ExportService {
     URL.revokeObjectURL(url);
   }
 
-  // Export selected RFIs with options
+  // NEW: Server-side PDF generation methods
+  async generateRFIPDF(rfiId: string): Promise<string> {
+    const response = await fetch(`/api/rfis/${rfiId}/pdf`);
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`PDF generation failed for RFI ${rfiId}:`, response.status, errorText);
+      throw new Error(`Failed to generate PDF for RFI ${rfiId}: ${response.status} ${response.statusText}`);
+    }
+    
+    const blob = await response.blob();
+    return URL.createObjectURL(blob);
+  }
+
+  // Generate multiple PDFs for preview
+  async generateMultiplePDFPreviews(rfiIds: string[]): Promise<string[]> {
+    const promises = rfiIds.map(id => this.generateRFIPDF(id));
+    return Promise.all(promises);
+  }
+
+
+
+  // Export package using server-side generation
+  async exportRFIPackageServerSide(rfiIds: string[], includeAttachments: boolean = true): Promise<void> {
+    const response = await fetch('/api/export/pdf-package', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        rfiIds,
+        includeAttachments
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to generate PDF package');
+    }
+
+    // Download the ZIP file
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `RFI_Package_${new Date().toISOString().split('T')[0]}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  // EXISTING: Export selected RFIs with options (UNCHANGED)
   async exportSelectedRFIs(rfis: any[], options: ExportOptions, getPDFBlob?: (rfi: any) => Promise<Blob>): Promise<void> {
     if (options.exportFormat === 'excel' || options.exportFormat === 'both') {
       await this.exportToExcel(rfis, options);

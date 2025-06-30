@@ -45,6 +45,20 @@ export default function HomePage() {
     loadData();
   }, [getProjects, getRFIs, fetchRecentActivity, user]);
 
+  // Debug effect to log activities when they change
+  useEffect(() => {
+    if (activities.length > 0) {
+      console.log('🔥 HOMEPAGE ACTIVITIES UPDATED:');
+      console.log('  - Total activities:', activities.length);
+      console.log('  - Sample activities:', activities.slice(0, 3).map(a => ({
+        type: a.type,
+        rfi_number: a.rfi_number,
+        description: a.description
+      })));
+      console.log('  - All activity types:', [...new Set(activities.map(a => a.type))]);
+    }
+  }, [activities]);
+
   // Show loading while data is being fetched
   if (loading) {
     return (

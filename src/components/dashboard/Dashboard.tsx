@@ -5,16 +5,105 @@ import { useProjects } from '@/hooks/useProjects';
 import { useRFIs } from '@/hooks/useRFIs';
 import { format, startOfWeek, endOfWeek } from 'date-fns';
 import type { RFI } from '@/lib/types';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
+
+// Component to display contractor logo from database or localStorage fallback
+function ContractorLogoDisplay() {
+  const { session } = useAuth();
+  const [contractorLogo, setContractorLogo] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadContractorLogo = async () => {
+      if (typeof window !== 'undefined' && session?.user?.id) {
+        try {
+          // Try to load from database first
+          const { data: userCompany } = await supabase
+            .from('company_users')
+            .select('company_id')
+            .eq('user_id', session.user.id)
+            .single();
+            
+          if (userCompany) {
+            const { data: company } = await supabase
+              .from('companies')
+              .select('logo_url')
+              .eq('id', userCompany.company_id)
+              .single();
+              
+            const logoUrl = company?.logo_url || localStorage.getItem('contractor_logo') || null;
+            setContractorLogo(logoUrl);
+          }
+        } catch (error) {
+          // Fallback to localStorage if database query fails
+          const fallbackLogo = localStorage.getItem('contractor_logo') || null;
+          setContractorLogo(fallbackLogo);
+        }
+      }
+    };
+
+    loadContractorLogo();
+  }, [session?.user?.id]);
+
+  return contractorLogo ? (
+    <img
+      src={contractorLogo}
+      alt="Contractor Logo"
+      className="max-w-full max-h-full object-contain"
+    />
+  ) : (
+    <div className="bg-gray-200 w-full h-full flex items-center justify-center rounded">
+      <span className="text-xs text-gray-500">No Logo</span>
+    </div>
+  );
+}
 
 export function Dashboard() {
   const { projects } = useProjects();
   const { rfis, getRFIs, loading } = useRFIs();
+  const { session } = useAuth();
 
   // Fetch RFIs when component mounts
   useEffect(() => {
     getRFIs();
   }, [getRFIs]);
   const [selectedProjectId, setSelectedProjectId] = useState('');
+  const [generatingPDF, setGeneratingPDF] = useState(false);
+  const [contractorLogo, setContractorLogo] = useState<string | null>(null);
+
+  // Load contractor logo
+  useEffect(() => {
+    const loadContractorLogo = async () => {
+      if (typeof window !== 'undefined' && session?.user?.id) {
+        try {
+          // Try to load from database first
+          const { data: userCompany } = await supabase
+            .from('company_users')
+            .select('company_id')
+            .eq('user_id', session.user.id)
+            .single();
+            
+          if (userCompany) {
+            const { data: company } = await supabase
+              .from('companies')
+              .select('logo_url')
+              .eq('id', userCompany.company_id)
+              .single();
+              
+            const logoUrl = company?.logo_url || localStorage.getItem('contractor_logo') || null;
+            setContractorLogo(logoUrl);
+          }
+        } catch (error) {
+          // Fallback to localStorage if database query fails
+          const fallbackLogo = localStorage.getItem('contractor_logo') || null;
+          setContractorLogo(fallbackLogo);
+        }
+      }
+    };
+
+    loadContractorLogo();
+  }, [session?.user?.id]);
+
 
   const selectedProject = useMemo(() => projects.find(p => p.id === selectedProjectId), [projects, selectedProjectId]);
   const projectRFIs = useMemo(() => rfis.filter(rfi => rfi.project_id === selectedProjectId), [rfis, selectedProjectId]);
@@ -145,40 +234,112 @@ export function Dashboard() {
 
   return (
     <div className="bg-white p-8 rounded-lg shadow max-w-5xl mx-auto print:bg-white print:shadow-none print:p-4">
-      {/* Project Selector */}
-      <div className="mb-6 flex items-center gap-4">
-        <label htmlFor="project-select" className="font-semibold text-gray-700">Select Project:</label>
-        <select
-          id="project-select"
-          className="border border-gray-300 rounded px-3 py-2"
-          value={selectedProjectId}
-          onChange={e => setSelectedProjectId(e.target.value)}
-        >
-          <option value="">Select a project</option>
-          {projects.map(project => (
-            <option key={project.id} value={project.id}>{project.project_name}</option>
-          ))}
-        </select>
+      {/* Project Selector and PDF Button */}
+      <div className="mb-6 flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <label htmlFor="project-select" className="font-semibold text-gray-700">Select Project:</label>
+          <select
+            id="project-select"
+            className="border border-gray-300 rounded px-3 py-2"
+            value={selectedProjectId}
+            onChange={e => setSelectedProjectId(e.target.value)}
+          >
+            <option value="">Select a project</option>
+            {projects.map(project => (
+              <option key={project.id} value={project.id}>{project.project_name}</option>
+            ))}
+          </select>
+        </div>
+        
+        {/* PDF Generation Button - Only show when project is selected */}
+        {selectedProjectId && (
+          <button
+            className="print:hidden flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors disabled:bg-blue-400"
+            onClick={async () => {
+              try {
+                setGeneratingPDF(true);
+                
+                // Prepare data for PDF generation with all RFI details
+                const enhancedRFIs = recentRFIs.map(rfi => ({
+                  ...rfi,
+                  actualCost: calculateActualCost(rfi),
+                  formattedCost: formatCurrency(calculateActualCost(rfi)),
+                  fieldWorkStatus: getFieldWorkStatus(rfi),
+                  isOverdue: isRfiOverdue(rfi),
+                  formattedCreatedDate: rfi.created_at ? format(new Date(rfi.created_at), 'MMM d, yyyy') : '-',
+                  hasResponse: rfi.response_date ? 'Yes' : 'No'
+                }));
+
+                const reportData = {
+                  project: selectedProject,
+                  rfis: enhancedRFIs,
+                  stats: {
+                    totalRFIs,
+                    openRFIs,
+                    overdueRFIs,
+                    newRFIsThisWeek,
+                    respondedRFIsThisWeek,
+                    weekRange
+                  },
+                  logos: {
+                    contractorLogo: contractorLogo,
+                    clientLogo: selectedProject?.client_logo_url || null
+                  }
+                };
+
+                const response = await fetch('/api/download-report', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify(reportData)
+                });
+
+                if (!response.ok) {
+                  throw new Error('Failed to generate PDF');
+                }
+
+                // Create download link
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `rfi-report-${selectedProject?.project_name || 'report'}.pdf`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+              } catch (error) {
+                console.error('Error generating PDF:', error);
+                alert('Failed to generate PDF report. Please try again.');
+              } finally {
+                setGeneratingPDF(false);
+              }
+            }}
+            disabled={generatingPDF}
+          >
+            {generatingPDF ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                <span>Generating PDF...</span>
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <span>Download PDF Report</span>
+              </>
+            )}
+          </button>
+        )}
       </div>
 
       {/* Report Header */}
-      <div className="flex items-center justify-between mb-8 print:mb-4">
+      <div className="flex items-center justify-between mb-8 print:mb-4 print:break-inside-avoid">
         {/* Contractor Logo */}
         <div className="w-32 h-16 flex items-center justify-center rounded print:border print:border-gray-400">
-          {(() => {
-            const contractorLogo = typeof window !== 'undefined' ? localStorage.getItem('contractor_logo') : null;
-            return contractorLogo ? (
-              <img
-                src={contractorLogo}
-                alt="Contractor Logo"
-                className="max-w-full max-h-full object-contain"
-              />
-            ) : (
-              <div className="bg-gray-200 w-full h-full flex items-center justify-center rounded">
-                <span className="text-xs text-gray-500">No Logo</span>
-              </div>
-            );
-          })()}
+          <ContractorLogoDisplay />
         </div>
         <div className="text-center flex-1">
           <h1 className="text-3xl font-bold mb-1">RFI Status Report</h1>
@@ -236,7 +397,7 @@ export function Dashboard() {
       ) : (
         <>
           {/* Weekly Summary Section */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8 print:mb-4">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8 print:mb-4 print:break-inside-avoid">
             <SummaryCard label="Total RFIs" value={totalRFIs} />
             <SummaryCard label="Open RFIs" value={openRFIs} />
             <SummaryCard label="Overdue RFIs" value={overdueRFIs} />
@@ -246,7 +407,7 @@ export function Dashboard() {
 
           {/* Detailed Status Section */}
           <div className="mb-8 print:mb-4">
-            <h2 className="text-lg font-bold mb-2">Recent RFI History (Last 10)</h2>
+            <h2 className="text-lg font-bold mb-2 print:text-black">Recent RFI History (Last 10)</h2>
             <RfiTable 
               rfis={recentRFIs} 
               emptyMessage="No recent RFIs." 
@@ -301,22 +462,22 @@ function RfiTable({ rfis, emptyMessage, calculateActualCost, formatCurrency, get
   };
 
   return (
-    <div className="overflow-x-auto">
-      <table className="min-w-full border border-gray-200 rounded">
-        <thead className="bg-gray-100">
+    <div className="overflow-x-auto print:overflow-visible">
+      <table className="min-w-full border border-gray-200 rounded print:border-black">
+        <thead className="bg-gray-100 print:bg-gray-200">
           <tr>
-            <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">RFI #</th>
-            <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Subject</th>
-            <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Status</th>
-            <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Field Work</th>
-            <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Created</th>
-            <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Actual Cost</th>
-            <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Response</th>
+            <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 print:text-black border-b print:border-black">RFI #</th>
+            <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 print:text-black border-b print:border-black">Subject</th>
+            <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 print:text-black border-b print:border-black">Status</th>
+            <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 print:text-black border-b print:border-black">Field Work</th>
+            <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 print:text-black border-b print:border-black">Created</th>
+            <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 print:text-black border-b print:border-black">Actual Cost</th>
+            <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 print:text-black border-b print:border-black">Response</th>
           </tr>
         </thead>
         <tbody>
           {rfis.map((rfi, index) => (
-            <tr key={rfi.id || index} className="border-b border-gray-200 hover:bg-gray-50">
+            <tr key={rfi.id || index} className="border-b border-gray-200 hover:bg-gray-50 print:border-black print:hover:bg-transparent">
               <td className="px-4 py-3 text-sm">
                 <div className="flex items-center gap-2">
                   <span>{rfi.rfi_number || 'N/A'}</span>

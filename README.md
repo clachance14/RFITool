@@ -70,6 +70,7 @@ A comprehensive web application for generating, tracking, and managing Request f
 - **[Manual Testing Guide](docs/MANUAL_PRODUCTION_TESTING.md)** - Manual verification steps
 
 ### New Feature Documentation
+- **[AI Code Review Setup](docs/CODERABBIT_SETUP.md)** - CodeRabbit integration and usage guide
 - **[Notification System](docs/NOTIFICATION_SYSTEM.md)** - Real-time notification system guide
 - **[Timesheet Cost Tracking](docs/TIMESHEET_COST_TRACKING.md)** - Cost tracking system documentation
 
@@ -92,7 +93,40 @@ A comprehensive web application for generating, tracking, and managing Request f
 - **E2E Framework:** Custom 5-component architecture with Playwright
 - **Notifications:** Real-time polling, email integration
 - **Cost Tracking:** PostgreSQL with automated calculations
+- **AI Code Review:** CodeRabbit for automated PR reviews and IDE integration
 - **Deployment:** Vercel-ready with Supabase integration
+
+## 🤖 AI Code Review Integration
+
+RFITrak uses **CodeRabbit** for automated AI code reviews to maintain enterprise-grade code quality and security standards.
+
+### Key Features
+- **🔍 Real-time IDE Reviews** - Get instant feedback while coding in Cursor/VS Code
+- **🔄 Automated PR Reviews** - Comprehensive analysis of all pull requests with context-aware suggestions
+- **🛡️ Security-focused** - Specialized rules for RLS policies, SQL injection prevention, and enterprise security
+- **⚡ Performance Optimization** - Next.js and React performance best practices with bundle optimization
+- **🏗️ Construction Industry Context** - Understands RFI management workflows and multi-tenant architecture
+- **📋 Testing Integration** - Validates component coverage and TypeScript compliance
+
+### Configuration Files
+- **`.coderabbit.yaml`** - Main configuration with RFITrak-specific rules and security focus
+- **`.github/workflows/coderabbit.yml`** - GitHub Actions workflow for automated PR reviews
+- **Component-specific instructions** - Tailored review guidelines for RFI, admin, client, and API components
+
+### Benefits for RFITrak Development
+- **Enterprise Security** - Catches RLS policy violations and authentication issues
+- **Code Quality** - Maintains TypeScript strict compliance and React best practices  
+- **Performance** - Identifies bundle size issues and optimization opportunities
+- **Consistency** - Ensures uniform code patterns across the large codebase
+- **Learning** - Provides educational feedback to improve development practices
+
+### Setup for Developers
+1. **Install CodeRabbit extension** in Cursor or VS Code from the marketplace
+2. **Configure settings** - Set review mode and AI integration preferences
+3. **GitHub Integration** - CodeRabbit automatically reviews all PRs when installed
+4. **Custom Rules** - Leverages RFITrak-specific security and performance rules
+
+*CodeRabbit integration ensures RFITrak maintains its enterprise-grade quality standards while accelerating development velocity.*
 
 ## 🧪 Testing Framework Achievements
 
@@ -169,6 +203,17 @@ A comprehensive web application for generating, tracking, and managing Request f
    - Notifications: http://localhost:3000/notifications
 
 ## 📈 Recent Updates
+
+**June 29, 2025** - **AI CODE REVIEW INTEGRATION**
+- ✅ Complete CodeRabbit integration for automated code reviews
+- ✅ Real-time IDE reviews in Cursor and VS Code with free tier
+- ✅ Automated PR reviews with enterprise security focus
+- ✅ Custom configuration for RFITrak-specific patterns and rules
+- ✅ Security-focused review rules for RLS policies and SQL injection prevention
+- ✅ Performance optimization rules for Next.js and React patterns
+- ✅ Construction industry context understanding for RFI workflows
+- ✅ Component-specific review instructions for different code areas
+- ✅ GitHub Actions workflow for automated PR analysis
 
 **June 16, 2025** - **NOTIFICATION SYSTEM & COST TRACKING RELEASE**
 - ✅ Complete notification system implementation with real-time updates

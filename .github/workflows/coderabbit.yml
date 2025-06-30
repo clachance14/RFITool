@@ -1,0 +1,41 @@
+name: CodeRabbit Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  pull_request_review_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  coderabbit:
+    runs-on: ubuntu-latest
+    name: CodeRabbit Review
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          # Fetch full history for better context
+          fetch-depth: 0
+          
+      - name: CodeRabbit Review
+        uses: coderabbit-ai/coderabbit-action@v2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          
+      # Add context about RFITrak for better reviews
+      - name: Add RFITrak Context
+        run: |
+          echo "# RFITrak Enterprise RFI Management System" >> $GITHUB_STEP_SUMMARY
+          echo "**Focus Areas:**" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔒 Security: RLS policies, SQL injection prevention, authentication" >> $GITHUB_STEP_SUMMARY
+          echo "- ⚡ Performance: Next.js optimization, React patterns, database queries" >> $GITHUB_STEP_SUMMARY
+          echo "- 🧪 Testing: Component coverage, E2E validation, type safety" >> $GITHUB_STEP_SUMMARY
+          echo "- 🏗️ Construction Industry: Multi-tenant data, project workflows" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Stack:** Next.js 14, TypeScript, Supabase, Tailwind CSS" >> $GITHUB_STEP_SUMMARY 
